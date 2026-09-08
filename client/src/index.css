@@ -1,0 +1,36 @@
+@import './styles/themes.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: var(--finova-bg-secondary);
+    color: var(--finova-text-main);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--finova-text-heading);
+  }
+}
+
+/* Custom humanized scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--finova-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--finova-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--finova-text-secondary);
+}
+

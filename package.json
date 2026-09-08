@@ -1,0 +1,13 @@
+{
+  "name": "finova-banking-system",
+  "version": "1.0.0",
+  "description": "Finova - Modern Digital Banking Platform (MERN + AI/ML)",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix client",
+    "start": "npm start --prefix server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "test:api": "node server/scripts/test_all_endpoints.js"
+  }
+}

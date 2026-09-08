@@ -1,0 +1,177 @@
+/* ==========================================================================
+   FINOVA MULTI-THEME DESIGN SYSTEM (LIGHT, DARK, NIGHT)
+   ========================================================================== */
+
+:root,
+[data-theme="light"] {
+  /* Backgrounds */
+  --finova-bg-main: #FCFBF8;
+  --finova-bg-secondary: #F7F5EF;
+  --finova-card-bg: #FFFFFF;
+  --finova-card-elevated: #FCFBF8;
+  --finova-input-bg: #FFFFFF;
+  --finova-dropdown-bg: #FFFFFF;
+  --finova-modal-overlay: rgba(16, 42, 67, 0.45);
+
+  /* Brand & Accents */
+  --finova-primary: #17324D;
+  --finova-deep: #102A43;
+  --finova-navy: #102A43;
+  --finova-blue: #4F7CAC;
+  --finova-sage: #5B8C72;
+  --finova-mint: #DDEDE4;
+  --finova-warm-accent: #C58A3A;
+
+  /* Typography */
+  --finova-text-main: #263238;
+  --finova-text-secondary: #667085;
+  --finova-text-muted: #94A3B8;
+  --finova-text-heading: #102A43;
+
+  /* Borders & Dividers */
+  --finova-border: #E2E0DA;
+  --finova-border-subtle: #EFECE6;
+
+  /* Semantic Status */
+  --finova-success: #3F7D58;
+  --finova-success-bg: #DDEDE4;
+  --finova-warning: #C58A3A;
+  --finova-warning-bg: #FBF2E3;
+  --finova-danger: #B85C5C;
+  --finova-danger-bg: #F9ECEC;
+  --finova-info: #4F7CAC;
+  --finova-info-bg: #EBF2F8;
+
+  /* Chart & Analytics */
+  --finova-chart-grid: #E2E0DA;
+  --finova-chart-tooltip-bg: #102A43;
+  --finova-chart-tooltip-text: #FCFBF8;
+
+  /* Shadows */
+  --finova-shadow: 0 2px 8px rgba(23, 50, 77, 0.05);
+  --finova-shadow-md: 0 4px 14px rgba(23, 50, 77, 0.08);
+}
+
+/* ==========================================================================
+   DARK MODE — Balanced, modern, premium, comfortable
+   ========================================================================== */
+[data-theme="dark"] {
+  /* Backgrounds */
+  --finova-bg-main: #111827;
+  --finova-bg-secondary: #172033;
+  --finova-card-bg: #1E293B;
+  --finova-card-elevated: #243247;
+  --finova-input-bg: #1E293B;
+  --finova-dropdown-bg: #1E293B;
+  --finova-modal-overlay: rgba(0, 0, 0, 0.65);
+
+  /* Brand & Accents */
+  --finova-primary: #6EA8D7;
+  --finova-deep: #172033;
+  --finova-navy: #2563EB;
+  --finova-blue: #7FA9C9;
+  --finova-sage: #78A88C;
+  --finova-mint: #1F3A32;
+  --finova-warm-accent: #D6A85F;
+
+  /* Typography */
+  --finova-text-main: #F8FAFC;
+  --finova-text-secondary: #CBD5E1;
+  --finova-text-muted: #94A3B8;
+  --finova-text-heading: #F8FAFC;
+
+  /* Borders & Dividers */
+  --finova-border: #334155;
+  --finova-border-subtle: #253346;
+
+  /* Semantic Status */
+  --finova-success: #6FA884;
+  --finova-success-bg: rgba(111, 168, 132, 0.15);
+  --finova-warning: #D6A85F;
+  --finova-warning-bg: rgba(214, 168, 95, 0.15);
+  --finova-danger: #D27A7A;
+  --finova-danger-bg: rgba(210, 122, 122, 0.15);
+  --finova-info: #7FA9C9;
+  --finova-info-bg: rgba(127, 169, 201, 0.15);
+
+  /* Chart & Analytics */
+  --finova-chart-grid: #293548;
+  --finova-chart-tooltip-bg: #0F172A;
+  --finova-chart-tooltip-text: #F8FAFC;
+
+  /* Shadows */
+  --finova-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --finova-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+/* ==========================================================================
+   NIGHT MODE — Warmer, low-light optimized, calming, soft contrast
+   ========================================================================== */
+[data-theme="night"] {
+  /* Backgrounds */
+  --finova-bg-main: #0F1720;
+  --finova-bg-secondary: #151D27;
+  --finova-card-bg: #1A2430;
+  --finova-card-elevated: #202C38;
+  --finova-input-bg: #1A2430;
+  --finova-dropdown-bg: #1A2430;
+  --finova-modal-overlay: rgba(5, 10, 15, 0.75);
+
+  /* Brand & Accents */
+  --finova-primary: #8AA9C1;
+  --finova-deep: #151D27;
+  --finova-navy: #2563EB;
+  --finova-blue: #8AA9C1;
+  --finova-sage: #7FA68C;
+  --finova-mint: #1B2E28;
+  --finova-warm-accent: #C9A86A;
+
+  /* Typography */
+  --finova-text-main: #E8EDF2;
+  --finova-text-secondary: #AAB6C2;
+  --finova-text-muted: #7F8B97;
+  --finova-text-heading: #E8EDF2;
+
+  /* Borders & Dividers */
+  --finova-border: #2A3744;
+  --finova-border-subtle: #1F2B36;
+
+  /* Semantic Status */
+  --finova-success: #7FA68C;
+  --finova-success-bg: rgba(127, 166, 140, 0.15);
+  --finova-warning: #C9A86A;
+  --finova-warning-bg: rgba(201, 168, 106, 0.15);
+  --finova-danger: #B86B6B;
+  --finova-danger-bg: rgba(184, 107, 107, 0.15);
+  --finova-info: #8AA9C1;
+  --finova-info-bg: rgba(138, 169, 193, 0.15);
+
+  /* Chart & Analytics */
+  --finova-chart-grid: #24303D;
+  --finova-chart-tooltip-bg: #0B121A;
+  --finova-chart-tooltip-text: #E8EDF2;
+
+  /* Shadows */
+  --finova-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --finova-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+/* ==========================================================================
+   SMOOTH THEME TRANSITION
+   ========================================================================== */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Disable transitions during rapid resize or when user prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
+}
