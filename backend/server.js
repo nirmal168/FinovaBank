@@ -85,10 +85,21 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, postman)
+      // Allow requests with no origin (mobile apps, curl, postman)
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
+
+      // Automatically allow Vercel production and preview deployments
+      try {
+        const { hostname } = new URL(origin);
+        if (hostname.endsWith('.vercel.app')) {
+          return callback(null, true);
+        }
+      } catch (err) {
+        // invalid origin url format
+      }
+
       return callback(new Error('Blocked by CORS policy'));
     },
     credentials: true,
