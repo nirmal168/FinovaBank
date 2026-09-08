@@ -1,4 +1,4 @@
-﻿const otpService = require('../services/otpService');
+const otpService = require('../services/otpService');
 const User = require('../models/User');
 
 // @desc    Request a new OTP for specified purpose
@@ -35,6 +35,7 @@ const requestOtp = async (req, res, next) => {
       message: result.message,
       expiresIn: result.expiresIn,
       cooldown: result.cooldown,
+      devOtp: result.rawOtp,
     });
   } catch (error) {
     if (error.statusCode === 429) {
@@ -112,6 +113,7 @@ const resendOtp = async (req, res, next) => {
       success: true,
       message: result.message,
       cooldown: result.cooldown,
+      devOtp: result.rawOtp,
     });
   } catch (error) {
     if (error.statusCode === 429) {

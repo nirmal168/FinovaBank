@@ -93,7 +93,7 @@ const Notifications = () => {
               Real-Time Security & Banking Activity
             </span>
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Notification Center</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">Notification Center</h1>
           <p className="text-xs text-slate-400 mt-1">
             System activity alerts, fund transfers, transaction updates, and security notices.
           </p>

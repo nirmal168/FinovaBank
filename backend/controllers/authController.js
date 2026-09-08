@@ -3,76 +3,17 @@ const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 const { createNotification } = require('../utils/notificationService');
 const otpService = require('../services/otpService');
+const emailService = require('../services/emailService');
 const { logAuditEvent } = require('../utils/auditLogger');
 
-// @desc    Register a new user (Customer or Admin)
+// @desc    Register a new user (Disabled: customer self-registration prohibited)
 // @route   POST /api/auth/register
 // @access  Public
 const register = async (req, res, next) => {
-  try {
-    const { name, email, phone, password, role } = req.body;
-
-    // Check if user already exists
-    const userExists = await User.findOne({ email: email.toLowerCase().trim() });
-    if (userExists) {
-      return res.status(400).json({
-        success: false,
-        message: 'A user with this email address already exists.',
-      });
-    }
-
-    // Default role is customer; allow admin if specified (useful for initial admin setup/testing)
-    const assignedRole = role === 'admin' ? 'admin' : 'customer';
-
-    const user = await User.create({
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      phone: phone.trim(),
-      password,
-      role: assignedRole,
-      isVerified: true,
-      isActive: true,
-    });
-
-    const token = generateToken(user._id, user.role);
-
-    // Set secure HTTP-only cookie
-    const cookieOptions = {
-      httpOnly: true,
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 1 day
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-    };
-    res.cookie('token', token, cookieOptions);
-
-    // Audit registration
-    await logAuditEvent({
-      req,
-      user: user._id,
-      action: 'USER_REGISTER',
-      entity: 'User',
-      entityId: user._id,
-      metadata: { name: user.name, email: user.email, role: user.role },
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Registration successful.',
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
+  return res.status(403).json({
+    success: false,
+    message: 'Customer accounts are created by Finova administrators. Please contact your administrator to obtain credentials.',
+  });
 };
 
 // @desc    Login user & get token
@@ -80,24 +21,38 @@ const register = async (req, res, next) => {
 // @access  Public
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const rawIdentifier = (req.body.identifier || req.body.email || '').trim();
+    const { password } = req.body;
 
-    // Fetch user with password explicitly included
+    if (!rawIdentifier || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide email/customer ID and password.',
+      });
+    }
+
+    // Support both email and customerId
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
+      $or: [
+        { email: rawIdentifier.toLowerCase() },
+        { customerId: rawIdentifier.toUpperCase() },
+      ],
     }).select('+password');
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password.',
+        message: 'Invalid credentials.',
       });
     }
 
-    if (!user.isActive) {
+    if (!user.isActive || user.status === 'Inactive' || user.status === 'Frozen') {
       return res.status(403).json({
         success: false,
-        message: 'Your account has been deactivated. Please contact support.',
+        message:
+          user.status === 'Frozen'
+            ? 'Your account has been frozen. Please contact Finova administration.'
+            : 'Your account has been deactivated. Please contact Finova administration.',
       });
     }
 
@@ -106,7 +61,7 @@ const login = async (req, res, next) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password.',
+        message: 'Invalid credentials.',
       });
     }
 
@@ -136,7 +91,7 @@ const login = async (req, res, next) => {
       action: 'USER_LOGIN',
       entity: 'Auth',
       entityId: user._id,
-      metadata: { email: user.email, role: user.role },
+      metadata: { email: user.email, role: user.role, customerId: user.customerId },
     });
 
     res.status(200).json({
@@ -149,6 +104,9 @@ const login = async (req, res, next) => {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        customerId: user.customerId,
+        mustChangePassword: !!user.mustChangePassword,
+        status: user.status || 'Active',
         isVerified: user.isVerified,
         isActive: user.isActive,
         createdAt: user.createdAt,
@@ -196,6 +154,9 @@ const getMe = async (req, res) => {
       email: req.user.email,
       phone: req.user.phone,
       role: req.user.role,
+      customerId: req.user.customerId,
+      mustChangePassword: !!req.user.mustChangePassword,
+      status: req.user.status || 'Active',
       isVerified: req.user.isVerified,
       isActive: req.user.isActive,
       dateOfBirth: req.user.dateOfBirth || null,
@@ -339,6 +300,7 @@ const changePassword = async (req, res, next) => {
     }
 
     user.password = newPassword;
+    user.mustChangePassword = false;
     await user.save();
 
     await logAuditEvent({
@@ -397,10 +359,16 @@ const forgotPassword = async (req, res, next) => {
 
     await user.save({ validateBeforeSave: false });
 
+    // Send password reset email with secure link
+    await emailService.sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      resetToken: rawResetToken,
+    });
+
     res.status(200).json({
       success: true,
-      message: 'Password reset instructions and 6-digit OTP dispatched to your email.',
-      resetToken: rawResetToken, // Legacy token fallback
+      message: 'If an account with that email address exists, password reset instructions and a verification code have been sent.',
       expiresIn: '5 minutes for OTP / 1 hour for link',
       cooldown: otpResult.cooldown,
     });

@@ -1,4 +1,4 @@
-﻿const Notification = require('../models/Notification');
+const Notification = require('../models/Notification');
 
 // @desc    Get user notifications with pagination & filter
 // @route   GET /api/notifications
@@ -32,6 +32,8 @@ const getNotifications = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
+      notifications,
+      unreadCount,
       data: {
         notifications,
         unreadCount,

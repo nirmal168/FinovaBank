@@ -60,10 +60,13 @@ const seedAdmin = async () => {
       customerUser.name = 'Sarah Jenkins';
       customerUser.password = 'password123';
       customerUser.role = 'customer';
+      customerUser.customerId = customerUser.customerId || 'FIN-CUS-10001';
+      customerUser.status = 'Active';
+      customerUser.mustChangePassword = false;
       customerUser.isActive = true;
       customerUser.isVerified = true;
       await customerUser.save();
-      console.log('✅ Customer demo updated: customer@securebank.com (password: password123)');
+      console.log('✅ Customer demo updated: customer@securebank.com (customerId: ' + customerUser.customerId + ')');
     } else {
       customerUser = await User.create({
         name: 'Sarah Jenkins',
@@ -71,10 +74,13 @@ const seedAdmin = async () => {
         phone: '+15551234567',
         password: 'password123',
         role: 'customer',
+        customerId: 'FIN-CUS-10001',
+        status: 'Active',
+        mustChangePassword: false,
         isVerified: true,
         isActive: true,
       });
-      console.log('🎉 Customer demo created: customer@securebank.com (password: password123)');
+      console.log('🎉 Customer demo created: customer@securebank.com (customerId: FIN-CUS-10001)');
     }
 
     // Ensure customer has a funded account
@@ -83,12 +89,12 @@ const seedAdmin = async () => {
       account.balance = 5420.50;
       await account.save();
     }
-    console.log(`✅ Customer demo account #${account.accountNumber} balance: $${account.balance.toFixed(2)}`);
+    console.log(`✅ Customer demo account #${account.accountNumber} balance: ₹${account.balance.toFixed(2)}`);
 
     // 3. Seed or Update Finova Demo Customer & Admin
     const demoAccounts = [
       { name: 'Finova Admin', email: 'admin@finova.com', role: 'admin', pass: 'admin123', phone: '+18005550199' },
-      { name: 'Sarah Jenkins', email: 'customer@finova.com', role: 'customer', pass: 'password123', phone: '+15551234567' },
+      { name: 'Sarah Jenkins', email: 'customer@finova.com', role: 'customer', pass: 'password123', phone: '+15551234567', customerId: 'FIN-CUS-10002' },
     ];
 
     for (const d of demoAccounts) {
@@ -99,6 +105,11 @@ const seedAdmin = async () => {
         u.role = d.role;
         u.isActive = true;
         u.isVerified = true;
+        u.status = 'Active';
+        if (d.customerId) {
+          u.customerId = d.customerId;
+          u.mustChangePassword = false;
+        }
         await u.save();
       } else {
         u = await User.create({
@@ -107,6 +118,9 @@ const seedAdmin = async () => {
           phone: d.phone,
           password: d.pass,
           role: d.role,
+          customerId: d.customerId || undefined,
+          status: 'Active',
+          mustChangePassword: false,
           isVerified: true,
           isActive: true,
         });
@@ -118,7 +132,7 @@ const seedAdmin = async () => {
           await acc.save();
         }
       }
-      console.log(`✅ Finova demo configured: ${d.email} (${d.role})`);
+      console.log(`✅ Finova demo configured: ${d.email} (${d.role}${d.customerId ? ', ID: ' + d.customerId : ''})`);
     }
 
     console.log('----------------------------------------------------');

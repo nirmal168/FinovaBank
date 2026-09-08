@@ -3,25 +3,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import accountService from '../../services/accountService';
 import Card, { CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
-import Modal from '../../components/ui/Modal';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import Loader from '../../components/ui/Loader';
 import { useToast } from '../../context/ToastContext';
 import {
   Wallet,
-  PlusCircle,
   ShieldCheck,
   Snowflake,
   Play,
   ArrowRight,
-  ArrowDownLeft,
-  ArrowUpRight,
   CheckCircle2,
   AlertCircle,
-  DollarSign,
   Copy,
   ExternalLink,
+  FileText,
 } from 'lucide-react';
 import { formatCurrency, formatAmount } from '../../utils/currency';
 
@@ -35,14 +30,6 @@ const Accounts = () => {
   // Confirmation dialog state
   const [accountToToggle, setAccountToToggle] = useState(null);
   const [toggleLoading, setToggleLoading] = useState(false);
-
-  // Modal states
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newAccountType, setNewAccountType] = useState('Savings');
-  const [initialDeposit, setInitialDeposit] = useState('500.00');
-  const [dailyLimit, setDailyLimit] = useState('5000.00');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [modalError, setModalError] = useState('');
   const [copiedId, setCopiedId] = useState('');
 
   const navigate = useNavigate();
@@ -69,31 +56,6 @@ const Accounts = () => {
     navigator.clipboard.writeText(num);
     setCopiedId(num);
     setTimeout(() => setCopiedId(''), 2000);
-  };
-
-  const handleCreateAccount = async (e) => {
-    e.preventDefault();
-    setModalError('');
-    setIsSubmitting(true);
-
-    try {
-      await accountService.createAccount({
-        accountType: newAccountType,
-        initialDeposit: parseFloat(initialDeposit) || 0,
-        dailyTransferLimit: parseFloat(dailyLimit) || 5000,
-      });
-
-      setIsCreateModalOpen(false);
-      showToast(`New ${newAccountType} account created successfully!`, 'success');
-      setNewAccountType('Savings');
-      setInitialDeposit('500.00');
-      fetchAccounts();
-    } catch (err) {
-      setModalError(err.message || 'Failed to create account');
-      showToast(err.message || 'Failed to create account', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const confirmToggleStatus = async () => {
@@ -125,14 +87,6 @@ const Accounts = () => {
             Manage your personal Savings and Current banking accounts
           </p>
         </div>
-
-        <Button
-          variant="primary"
-          icon={PlusCircle}
-          onClick={() => setIsCreateModalOpen(true)}
-        >
-          Open New Account
-        </Button>
       </div>
 
       {/* Aggregate Overview Card */}
@@ -151,17 +105,9 @@ const Accounts = () => {
           </p>
         </div>
 
-        <div className="flex gap-2.5">
-          <Link to="/deposit">
-            <Button variant="primary" size="sm" icon={ArrowDownLeft} className="!bg-emerald-600 hover:!bg-emerald-700">
-              Deposit
-            </Button>
-          </Link>
-          <Link to="/withdraw">
-            <Button variant="outline" size="sm" icon={ArrowUpRight} className="!bg-white/10 !text-white !border-white/20 hover:!bg-white/20">
-              Withdraw
-            </Button>
-          </Link>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-xs text-slate-300">
+          <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span>Deposits & withdrawals are processed by your bank branch or ATM.</span>
         </div>
       </div>
 
@@ -182,13 +128,10 @@ const Accounts = () => {
         <Card className="text-center py-12 p-6">
           <CardContent className="space-y-4">
             <Wallet className="h-12 w-12 text-slate-300 mx-auto" />
-            <h3 className="text-base font-bold text-slate-800">No Accounts Found</h3>
+            <h3 className="text-base font-bold text-slate-800">No Active Accounts</h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              You do not have any open accounts yet. Click below to open your first Savings or Current account.
+              You do not have any open accounts yet. Bank accounts are provisioned and opened exclusively by Finova bank administration.
             </p>
-            <Button variant="primary" size="sm" onClick={() => setIsCreateModalOpen(true)}>
-              Open First Account
-            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -303,11 +246,19 @@ const Accounts = () => {
                     )}
                   </button>
 
-                  <Link to={`/accounts/${acc._id}`}>
-                    <Button variant="outline" size="sm" icon={ExternalLink} iconPosition="right">
-                      View Details
-                    </Button>
-                  </Link>
+                  <div className="flex items-center gap-1.5">
+                    <Link to={`/statements?accountNumber=${acc.accountNumber}`}>
+                      <Button variant="ghost" size="sm" icon={FileText}>
+                        Statement
+                      </Button>
+                    </Link>
+
+                    <Link to={`/accounts/${acc._id}`}>
+                      <Button variant="outline" size="sm" icon={ExternalLink} iconPosition="right">
+                        Details
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </Card>
             );
@@ -315,100 +266,7 @@ const Accounts = () => {
         </div>
       )}
 
-      {/* Create Account Modal */}
-      <Modal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        title="Open New Bank Account"
-        description="Choose your account tier and opening balance"
-        footer={
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsCreateModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              isLoading={isSubmitting}
-              onClick={handleCreateAccount}
-            >
-              Confirm & Open Account
-            </Button>
-          </>
-        }
-      >
-        <form onSubmit={handleCreateAccount} className="space-y-4">
-          {modalError && (
-            <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 p-2.5 text-xs text-rose-600 dark:text-rose-400 border border-rose-500/20">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
-              <span>{modalError}</span>
-            </div>
-          )}
 
-          {/* Account Type Toggle */}
-          <div>
-            <label className="block text-xs font-semibold text-[var(--finova-text-heading)] mb-1.5">
-              Select Account Type
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setNewAccountType('Savings')}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  newAccountType === 'Savings'
-                    ? 'border-[var(--finova-navy)] bg-[var(--finova-navy)]/10 shadow-xs ring-1 ring-[var(--finova-navy)]'
-                    : 'border-[var(--finova-border)] hover:bg-[var(--finova-bg-secondary)]'
-                }`}
-              >
-                <div className="font-bold text-xs text-[var(--finova-text-heading)]">Savings Account</div>
-                <div className="text-[11px] text-[var(--finova-text-muted)] mt-0.5">High yield & wealth building</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setNewAccountType('Current')}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  newAccountType === 'Current'
-                    ? 'border-[var(--finova-navy)] bg-[var(--finova-navy)]/10 shadow-xs ring-1 ring-[var(--finova-navy)]'
-                    : 'border-[var(--finova-border)] hover:bg-[var(--finova-bg-secondary)]'
-                }`}
-              >
-                <div className="font-bold text-xs text-[var(--finova-text-heading)]">Current Account</div>
-                <div className="text-[11px] text-[var(--finova-text-muted)] mt-0.5">Daily transactions & billing</div>
-              </button>
-            </div>
-          </div>
-
-          <Input
-            label="Initial Opening Deposit (₹ INR)"
-            type="number"
-            step="0.01"
-            min="0"
-            value={initialDeposit}
-            onChange={(e) => setInitialDeposit(e.target.value)}
-            helperText="Funds credited immediately upon account opening."
-            required
-          />
-
-          <Input
-            label="Daily Transfer Limit (₹ INR)"
-            type="number"
-            step="100"
-            min="500"
-            value={dailyLimit}
-            onChange={(e) => setDailyLimit(e.target.value)}
-            helperText="Maximum allowed cumulative daily outgoing transfers."
-          />
-
-          <div className="p-3 bg-[var(--finova-bg-secondary)] rounded-xl border border-[var(--finova-border)] text-[11px] text-[var(--finova-text-muted)]">
-            A unique 12-digit account number (starting with 4082) will be generated automatically.
-          </div>
-        </form>
-      </Modal>
 
       {/* Confirmation Dialog for Freeze / Unfreeze */}
       <ConfirmationDialog

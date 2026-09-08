@@ -65,10 +65,6 @@ const Profile = () => {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // RBAC Test state
-  const [adminTestResult, setAdminTestResult] = useState(null);
-  const [adminTestLoading, setAdminTestLoading] = useState(false);
-
   // Synchronize state when user changes
   useEffect(() => {
     if (user) {
@@ -208,26 +204,6 @@ const Profile = () => {
     }
   };
 
-  // RBAC Test
-  const handleTestAdmin = async () => {
-    setAdminTestLoading(true);
-    setAdminTestResult(null);
-    try {
-      const data = await authService.testAdminAccess();
-      setAdminTestResult({
-        success: true,
-        message: data.message,
-      });
-    } catch (err) {
-      setAdminTestResult({
-        success: false,
-        message: err.message || 'Access Denied: 403 Forbidden',
-      });
-    } finally {
-      setAdminTestLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header Banner */}
@@ -270,7 +246,7 @@ const Profile = () => {
             {/* User Meta */}
             <div>
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                <h1 className="text-2xl font-extrabold tracking-tight">{user?.name}</h1>
+                <h1 className="text-2xl font-extrabold tracking-tight text-white">{user?.name}</h1>
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
                     user?.role === 'admin'
@@ -708,47 +684,6 @@ const Profile = () => {
                   {user?.updatedAt ? new Date(user.updatedAt).toLocaleTimeString() : 'N/A'}
                 </span>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Role Authorization Test Widget */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Role Authorization Test</CardTitle>
-              <CardDescription>
-                Verify backend protected RBAC access control
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs">
-              <p className="text-slate-600 leading-relaxed">
-                Test your current session permissions against <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[10px]">GET /api/auth/admin-test</code>:
-              </p>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                icon={Key}
-                onClick={handleTestAdmin}
-                isLoading={adminTestLoading}
-              >
-                Run Authorization Probe
-              </Button>
-
-              {adminTestResult && (
-                <div
-                  className={`p-3 rounded-lg border text-xs ${
-                    adminTestResult.success
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                      : 'bg-rose-50 border-rose-200 text-rose-800'
-                  }`}
-                >
-                  <p className="font-bold">
-                    {adminTestResult.success ? '200 OK — Authorized' : '403 Forbidden — Blocked'}
-                  </p>
-                  <p className="mt-1 text-[11px]">{adminTestResult.message}</p>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>

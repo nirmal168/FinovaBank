@@ -31,8 +31,13 @@ const createAccount = async (req, res, next) => {
       exists = await Account.findOne({ accountNumber });
     }
 
+    const targetUserId =
+      req.user.role === 'admin' && (req.body.userId || req.body.customerId || req.body.user)
+        ? (req.body.userId || req.body.customerId || req.body.user)
+        : req.user._id;
+
     const account = await Account.create({
-      user: req.user._id,
+      user: targetUserId,
       accountNumber,
       accountType: normalizedType,
       balance: parseFloat(openingBalance.toFixed(2)),

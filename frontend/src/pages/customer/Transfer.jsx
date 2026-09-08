@@ -66,6 +66,7 @@ const Transfer = () => {
   const { user } = useAuth();
   const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const [otpError, setOtpError] = useState('');
+  const [devOtp, setDevOtp] = useState(null);
   const [pendingTransferPayload, setPendingTransferPayload] = useState(null);
 
   // Success receipt state
@@ -254,8 +255,8 @@ const Transfer = () => {
       reference: reference.trim() || `REF-${Date.now()}`,
     };
 
-    if (otpCode) {
-      payload.otp = otpCode;
+    if (typeof otpCode === 'string' && otpCode.trim()) {
+      payload.otp = otpCode.trim();
     }
 
     try {
@@ -264,6 +265,7 @@ const Transfer = () => {
       // Check if backend intercepted for OTP requirement
       if (res.requiresOtp) {
         setPendingTransferPayload(payload);
+        if (res.devOtp) setDevOtp(res.devOtp);
         setIsConfirmModalOpen(false);
         setIsOtpModalOpen(true);
         return;
@@ -639,9 +641,26 @@ const Transfer = () => {
 
                   {/* Receiver verification error alert */}
                   {receiverError && (
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
-                      <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
-                      <span>{receiverError}</span>
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1.5">
+                      <div className="flex items-center gap-2 font-semibold text-rose-700">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                        <span>{receiverError}</span>
+                      </div>
+                      <p className="text-[11px] text-rose-600 pl-6">
+                        Transfers in Finova require a valid 12-digit Finova bank account (format: <span className="font-mono font-bold">4082XXXXXXXX</span>).
+                      </p>
+                      <div className="pl-6 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReceiverAccountNumber('408234977525');
+                            handleVerifyReceiver('408234977525');
+                          }}
+                          className="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline"
+                        >
+                          → Fill Demo Payee Account: Sarah Jenkins (408234977525)
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -830,7 +849,7 @@ const Transfer = () => {
               size="sm"
               isLoading={isSubmitting}
               disabled={isSubmitting}
-              onClick={handleConfirmTransfer}
+              onClick={() => handleConfirmTransfer()}
             >
               {isSubmitting ? 'Processing Transfer...' : 'Confirm & Send Transfer'}
             </Button>
@@ -912,6 +931,7 @@ const Transfer = () => {
         description={`To protect your account, this transfer of ${formatCurrency(parseFloat(amount || '0'))} requires 6-digit passcode authorization sent to ${user?.email}.`}
         loading={isSubmitting}
         error={otpError}
+        devOtp={devOtp}
       />
     </div>
   );

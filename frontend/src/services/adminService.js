@@ -19,8 +19,24 @@ export const adminService = {
     return response.data;
   },
 
-  updateCustomerStatus: async (id, isActive) => {
-    const response = await api.put(`/admin/customers/${id}/status`, { isActive });
+  createCustomer: async (customerData) => {
+    const response = await api.post('/admin/customers', customerData);
+    return response.data;
+  },
+
+  getCustomerById: async (id) => {
+    const response = await api.get(`/admin/customers/${id}`);
+    return response.data;
+  },
+
+  resetCustomerPassword: async (id) => {
+    const response = await api.post(`/admin/customers/${id}/reset-password`);
+    return response.data;
+  },
+
+  updateCustomerStatus: async (id, statusData) => {
+    const payload = typeof statusData === 'boolean' ? { isActive: statusData } : (typeof statusData === 'string' ? { status: statusData } : statusData);
+    const response = await api.put(`/admin/customers/${id}/status`, payload);
     return response.data;
   },
 
@@ -32,6 +48,27 @@ export const adminService = {
 
   updateAccountStatus: async (id, status) => {
     const response = await api.put(`/admin/accounts/${id}/status`, { status });
+    return response.data;
+  },
+
+  // Card Management & Issuance
+  getCards: async (params = {}) => {
+    const response = await api.get('/admin/cards', { params });
+    return response.data;
+  },
+
+  issueCard: async (cardData) => {
+    const response = await api.post('/admin/cards', cardData);
+    return response.data;
+  },
+
+  updateCardStatus: async (id, status) => {
+    const response = await api.put(`/admin/cards/${id}/status`, { status });
+    return response.data;
+  },
+
+  updateCardLimit: async (id, transactionLimit) => {
+    const response = await api.put(`/admin/cards/${id}/limit`, { transactionLimit });
     return response.data;
   },
 

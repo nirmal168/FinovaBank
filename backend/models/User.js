@@ -31,6 +31,27 @@ const userSchema = new mongoose.Schema(
       minlength: [6, 'Password must be at least 6 characters long'],
       select: false, // Don't return password by default
     },
+    customerId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      uppercase: true,
+    },
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+    },
+    status: {
+      type: String,
+      enum: ['Active', 'Inactive', 'Frozen'],
+      default: 'Active',
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     role: {
       type: String,
       enum: {
@@ -70,11 +91,28 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    emailPreferences: {
+      transactions: { type: Boolean, default: true },
+      loans: { type: Boolean, default: true },
+      promotional: { type: Boolean, default: false },
+    },
   },
   {
     timestamps: true,
   }
 );
+
+userSchema.statics.generateCustomerId = async function () {
+  let unique = false;
+  let customerId = '';
+  while (!unique) {
+    const randomNum = Math.floor(10000 + Math.random() * 90000);
+    customerId = `FIN-CUS-${randomNum}`;
+    const existing = await this.findOne({ customerId });
+    if (!existing) unique = true;
+  }
+  return customerId;
+};
 
 // Encrypt password using bcrypt before saving
 userSchema.pre('save', async function (next) {

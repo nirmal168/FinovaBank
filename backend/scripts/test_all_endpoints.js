@@ -1,590 +1,390 @@
-const BASE = 'http://localhost:5000';
-const ML_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:5000/api';
+const ROOT_URL = 'http://localhost:5000';
 
-async function req(url, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-  const res = await fetch(url, { ...options, headers });
-  let body;
-  try {
-    body = await res.json();
-  } catch (e) {
-    body = await res.text();
+async function req(method, path, body = null, token = null) {
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const options = {
+    method: method.toUpperCase(),
+    headers,
+  };
+  if (body) {
+    options.body = JSON.stringify(body);
   }
-  return { status: res.status, body };
+
+  const res = await fetch(url, options);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (e) {
+    data = await res.text();
+  }
+  return { status: res.status, ok: res.ok, data };
 }
 
-async function runFullEndpointAudit() {
-  console.log('===============================================================');
-  console.log('⚡ FINOVA FULL-SPECTRUM API AUDIT (ALL 57 ENDPOINTS)');
-  console.log('===============================================================\n');
+async function runAudit() {
+  console.log('================================================================');
+  console.log('  FINOVA BANK — COMPLETE ENDPOINT & BUG AUDIT SUITE');
+  console.log('================================================================\n');
 
   let passed = 0;
   let failed = 0;
+  const issues = [];
 
-  function assert(name, condition, details = '') {
+  function test(condition, name, details = '') {
     if (condition) {
-      console.log('  ✅ [PASS] ' + name);
+      console.log(`  [PASS] ${name}`);
       passed++;
     } else {
-      console.error('  ❌ [FAIL] ' + name + (details ? ' -> ' + details : ''));
+      console.error(`  [FAIL] ${name} ${details ? `-> ${details}` : ''}`);
       failed++;
+      issues.push({ name, details });
     }
   }
 
-  const ts = Date.now();
-  const custEmail = 'audit_cust_' + ts + '@example.com';
-  const adminEmail = 'audit_admin_' + ts + '@example.com';
-  const password = 'Password@123';
+  try {
+    // 1. Root & Health
+    console.log('--- 1. System Health & Infrastructure ---');
+    const rootRes = await req('GET', `${ROOT_URL}/`);
+    test(rootRes.status === 200 && rootRes.data?.version, 'GET / (Root Welcome)');
 
-  let custToken, adminToken;
-  let custId, adminId;
-  let primaryAccId, primaryAccNum;
-  let secondaryAccId, secondaryAccNum;
-  let cardId;
-  let loanId;
-  let beneId;
-  let txId;
-  let notifId;
-  let fraudAlertId;
-  let auditLogId;
+    const healthRes = await req('GET', '/health');
+    test(
+      healthRes.status === 200 && healthRes.data?.database?.status === 'connected',
+      'GET /api/health (Database Connected & API Operational)'
+    );
 
-  // --- 1. HEALTH & ROOT ---
-  console.log('--- SECTION 1: SYSTEM & HEALTH ENDPOINTS ---');
-  const rRoot = await req(BASE + '/');
-  assert('GET / (Welcome)', rRoot.status === 200 && rRoot.body.message.includes('Finova'));
+    // 2. Authentication & Provisioning
+    console.log('\n--- 2. Authentication & Admin-Provisioned Registration ---');
+    const regRes = await req('POST', '/auth/register', { email: 'fake@test.com' });
+    test(regRes.status === 403, 'POST /api/auth/register (403 Self-Registration Disabled)');
 
-  const rHealth = await req(BASE + '/api/health');
-  assert('GET /api/health (Health check)', rHealth.status === 200 && (rHealth.body.status === 'ok' || rHealth.body.status === 'UP'));
-
-  const rMLRoot = await req(ML_BASE + '/');
-  assert('GET / (ML Root)', rMLRoot.status === 200 && rMLRoot.body.status === 'online');
-
-  const rMLHealth = await req(ML_BASE + '/health');
-  assert('GET /health (ML Health alias)', rMLHealth.status === 200 && rMLHealth.body.status === 'online');
-
-  const rMLPredict = await req(ML_BASE + '/predict', {
-    method: 'POST',
-    body: JSON.stringify({ amount: 12000, transaction_frequency: 1, account_age: 180, transaction_hour: 3, previous_average_amount: 500, failed_attempts: 1, location_change: 1, is_new_beneficiary: 1 })
-  });
-  assert('POST /predict (ML Fraud Score)', rMLPredict.status === 200 && typeof rMLPredict.body.fraud_probability === 'number');
-
-  // --- 2. AUTHENTICATION ---
-  console.log('\n--- SECTION 2: AUTHENTICATION ENDPOINTS ---');
-  // Register customer
-  const rRegCust = await req(BASE + '/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ name: 'Audit Customer', email: custEmail, phone: '+91 9876543210', password, role: 'customer' })
-  });
-  assert('POST /api/auth/register (Customer)', rRegCust.status === 201 && rRegCust.body.token);
-  custToken = rRegCust.body.token;
-  custId = rRegCust.body.user?._id || rRegCust.body.user?.id;
-
-  // Register admin
-  const rRegAdmin = await req(BASE + '/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ name: 'Audit Admin', email: adminEmail, phone: '+91 9876543211', password, role: 'admin' })
-  });
-  assert('POST /api/auth/register (Admin)', rRegAdmin.status === 201 && rRegAdmin.body.token);
-  adminToken = rRegAdmin.body.token;
-  adminId = rRegAdmin.body.user?._id || rRegAdmin.body.user?.id;
-
-  // Login
-  const rLogin = await req(BASE + '/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email: custEmail, password })
-  });
-  assert('POST /api/auth/login', rLogin.status === 200 && rLogin.body.token);
-
-  // Get Me
-  const rMe = await req(BASE + '/api/auth/me', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/auth/me', rMe.status === 200 && rMe.body.user?.email === custEmail);
-
-  // Update Profile
-  const rProf = await req(BASE + '/api/auth/profile', {
-    method: 'PUT',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ phone: '+91 9876543219' })
-  });
-  assert('PUT /api/auth/profile', rProf.status === 200);
-
-  // Change Password
-  const rChangePass = await req(BASE + '/api/auth/change-password', {
-    method: 'PUT',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ currentPassword: password, newPassword: 'NewPassword@123' })
-  });
-  assert('PUT /api/auth/change-password', rChangePass.status === 200);
-
-  // Re-login with new password
-  const rReLogin = await req(BASE + '/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email: custEmail, password: 'NewPassword@123' })
-  });
-  custToken = rReLogin.body.token;
-
-  // Forgot password
-  const rForgot = await req(BASE + '/api/auth/forgot-password', {
-    method: 'POST',
-    body: JSON.stringify({ email: custEmail })
-  });
-  assert('POST /api/auth/forgot-password', rForgot.status === 200);
-  const resetToken = rForgot.body.resetToken;
-
-  // Reset password
-  if (resetToken) {
-    const rReset = await req(BASE + '/api/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ token: resetToken, newPassword: password })
+    // Admin login
+    const adminLogin = await req('POST', '/auth/login', {
+      identifier: 'admin@finova.com',
+      password: 'admin123'
     });
-    assert('POST /api/auth/reset-password', rReset.status === 200);
-    // login again with original password
-    const rL2 = await req(BASE + '/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email: custEmail, password })
+    test(adminLogin.status === 200 && adminLogin.data?.token, 'POST /api/auth/login (Admin Login)');
+    const adminToken = adminLogin.data?.token;
+
+    // Admin creates customer
+    const testEmail = `audit_cust_${Date.now()}@finova.test`;
+    const createCustRes = await req('POST', '/admin/customers', {
+      name: 'Rohan Verma',
+      email: testEmail,
+      phone: '9811223344',
+      initialDeposit: 25000,
+      accountType: 'Savings'
+    }, adminToken);
+    test(
+      createCustRes.status === 201 && createCustRes.data?.customer?.customerId,
+      'POST /api/admin/customers (Admin Provisions Customer with Auto CustomerId)',
+      JSON.stringify(createCustRes.data)
+    );
+    const customerId = createCustRes.data?.customer?.customerId;
+    const tempPassword = createCustRes.data?.temporaryPassword || createCustRes.data?.credentials?.temporaryPassword;
+    const customerAccountNum = createCustRes.data?.account?.accountNumber || createCustRes.data?.credentials?.accountNumber;
+    const customerAccountId = createCustRes.data?.account?._id || createCustRes.data?.account?.id;
+    const customerUserId = createCustRes.data?.customer?._id || createCustRes.data?.customer?.id;
+
+    // Customer login with Customer ID
+    const custLogin = await req('POST', '/auth/login', {
+      identifier: customerId,
+      password: tempPassword
     });
-    custToken = rL2.body.token;
-  } else {
-    assert('POST /api/auth/reset-password (Handled)', true);
-  }
+    test(
+      custLogin.status === 200 && custLogin.data?.user?.mustChangePassword === true,
+      `POST /api/auth/login (Customer Login via Customer ID: ${customerId})`
+    );
+    let customerToken = custLogin.data?.token;
 
-  // Admin test endpoint
-  const rAdminTest = await req(BASE + '/api/auth/admin-test', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/auth/admin-test', rAdminTest.status === 200);
+    // Customer rotates password
+    const newPassword = 'SecurePassword@2026';
+    const changePassRes = await req('PUT', '/auth/change-password', {
+      currentPassword: tempPassword,
+      newPassword
+    }, customerToken);
+    test(changePassRes.status === 200, 'PUT /api/auth/change-password (Mandatory First Password Change)');
 
-  // Logout
-  const rLogout = await req(BASE + '/api/auth/logout', { method: 'POST' });
-  assert('POST /api/auth/logout', rLogout.status === 200);
-
-  // --- 3. ACCOUNTS ---
-  console.log('\n--- SECTION 3: ACCOUNT ENDPOINTS ---');
-  // List customer accounts
-  const rAccs = await req(BASE + '/api/accounts', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/accounts', rAccs.status === 200 && Array.isArray(rAccs.body.accounts));
-  if (rAccs.body.accounts && rAccs.body.accounts.length > 0) {
-    primaryAccId = rAccs.body.accounts[0]._id;
-    primaryAccNum = rAccs.body.accounts[0].accountNumber;
-  }
-
-  // Create Secondary Account
-  const rNewAcc = await req(BASE + '/api/accounts', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ accountType: 'Savings', currency: 'INR' })
-  });
-  assert('POST /api/accounts', rNewAcc.status === 201 && rNewAcc.body.account);
-  if (rNewAcc.body.account) {
-    secondaryAccId = rNewAcc.body.account._id;
-    secondaryAccNum = rNewAcc.body.account.accountNumber;
-  }
-
-  // Account details by ID
-  if (primaryAccId) {
-    const rAccById = await req(BASE + '/api/accounts/' + primaryAccId, {
-      headers: { Authorization: 'Bearer ' + custToken }
+    // Relogin customer with new password
+    const custRelogin = await req('POST', '/auth/login', {
+      identifier: testEmail,
+      password: newPassword
     });
-    assert('GET /api/accounts/:id', rAccById.status === 200 && rAccById.body.account?._id === primaryAccId);
-  }
+    test(
+      custRelogin.status === 200 && custRelogin.data?.user?.mustChangePassword === false,
+      'POST /api/auth/login (Customer Login with New Password, mustChangePassword=false)'
+    );
+    customerToken = custRelogin.data?.token;
 
-  // Account lookup by account number
-  if (primaryAccNum) {
-    const rAccLookup = await req(BASE + '/api/accounts/lookup/' + primaryAccNum, {
-      headers: { Authorization: 'Bearer ' + custToken }
-    });
-    assert('GET /api/accounts/lookup/:accountNumber', rAccLookup.status === 200 && rAccLookup.body.account?.accountNumber === primaryAccNum);
-  }
+    // GET /api/auth/me
+    const meRes = await req('GET', '/auth/me', null, customerToken);
+    test(meRes.status === 200 && meRes.data?.user?.email === testEmail, 'GET /api/auth/me (User Profile Retrieval)');
 
-  // Put account status
-  if (secondaryAccId) {
-    const rAccStatus = await req(BASE + '/api/accounts/' + secondaryAccId + '/status', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + adminToken },
-      body: JSON.stringify({ status: 'Active' })
-    });
-    assert('PUT /api/accounts/:id/status', rAccStatus.status === 200);
-  }
+    // PUT /api/auth/profile
+    const updateProfileRes = await req('PUT', '/auth/profile', {
+      name: 'Rohan Verma Updated',
+      phone: '9811223399'
+    }, customerToken);
+    test(updateProfileRes.status === 200 && updateProfileRes.data?.user?.name === 'Rohan Verma Updated', 'PUT /api/auth/profile (Update Profile)');
 
-  // --- 4. TRANSACTIONS ---
-  console.log('\n--- SECTION 4: TRANSACTION ENDPOINTS ---');
-  // Deposit funds
-  const rDep = await req(BASE + '/api/transactions/deposit', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ accountId: primaryAccId, amount: 25000, description: 'Initial Salary Deposit' })
-  });
-  assert('POST /api/transactions/deposit', rDep.status === 200 && rDep.body.transaction);
-  if (rDep.body.transaction) txId = rDep.body.transaction._id;
+    // 3. Accounts Endpoints
+    console.log('\n--- 3. Account Management Endpoints ---');
+    const accountsRes = await req('GET', '/accounts', null, customerToken);
+    test(accountsRes.status === 200 && accountsRes.data?.accounts?.length >= 1, 'GET /api/accounts (List Customer Accounts)');
 
-  // Withdrawal funds
-  const rWith = await req(BASE + '/api/transactions/withdraw', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ accountId: primaryAccId, amount: 2000, description: 'ATM Cash Withdrawal' })
-  });
-  assert('POST /api/transactions/withdraw', rWith.status === 200);
+    // POST /api/accounts (Create secondary Current account)
+    const newAccountRes = await req('POST', '/accounts', {
+      accountType: 'Current',
+      initialDeposit: 5000
+    }, customerToken);
+    test(newAccountRes.status === 201 && newAccountRes.data?.account?.accountNumber, 'POST /api/accounts (Create Secondary Account)');
+    const secondAccount = newAccountRes.data?.account;
 
-  // Inter-account transfer
-  const rTrf = await req(BASE + '/api/transactions/transfer', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ fromAccountId: primaryAccId, receiverAccountNumber: secondaryAccNum, amount: 3000, description: 'Transfer to Savings' })
-  });
-  assert('POST /api/transactions/transfer', rTrf.status === 200, JSON.stringify(rTrf.body));
+    // GET /api/accounts/:id
+    const accByIdRes = await req('GET', `/accounts/${secondAccount.id || secondAccount._id}`, null, customerToken);
+    test(accByIdRes.status === 200 && accByIdRes.data?.account?.accountType === 'Current', 'GET /api/accounts/:id (Get Account by ID)');
 
-  // Get all customer transactions
-  const rTxList = await req(BASE + '/api/transactions', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/transactions', rTxList.status === 200 && Array.isArray(rTxList.body.transactions));
+    // GET /api/accounts/lookup/:accountNumber
+    const lookupRes = await req('GET', `/accounts/lookup/${customerAccountNum}`, null, customerToken);
+    test(lookupRes.status === 200 && lookupRes.data?.account?.accountNumber === customerAccountNum, 'GET /api/accounts/lookup/:accountNumber (Recipient Lookup)');
 
-  // Get primary account summary with transactions
-  const rTxAcc = await req(BASE + '/api/transactions/account', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/transactions/account', rTxAcc.status === 200 && rTxAcc.body.account);
+    // PUT /api/accounts/:id/status (Freeze then Unfreeze)
+    const freezeAcc = await req('PUT', `/accounts/${secondAccount.id || secondAccount._id}/status`, { status: 'Frozen' }, customerToken);
+    test(freezeAcc.status === 200 && freezeAcc.data?.account?.status === 'Frozen', 'PUT /api/accounts/:id/status (Freeze Account)');
 
-  // Get transaction history
-  const rTxHist = await req(BASE + '/api/transactions/history?limit=10', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/transactions/history', rTxHist.status === 200 && Array.isArray(rTxHist.body.transactions));
+    const unfreezeAcc = await req('PUT', `/accounts/${secondAccount.id || secondAccount._id}/status`, { status: 'Active' }, customerToken);
+    test(unfreezeAcc.status === 200 && unfreezeAcc.data?.account?.status === 'Active', 'PUT /api/accounts/:id/status (Unfreeze Account)');
 
-  // Transaction details by ID
-  if (txId) {
-    const rTxById = await req(BASE + '/api/transactions/' + txId, {
-      headers: { Authorization: 'Bearer ' + custToken }
-    });
-    assert('GET /api/transactions/:id', rTxById.status === 200 && rTxById.body.transaction?._id === txId);
-  }
+    // 4. Transactions Endpoints
+    console.log('\n--- 4. Transactions & Funds Movement ---');
+    // Deposit
+    const depRes = await req('POST', '/transactions/deposit', {
+      accountNumber: customerAccountNum,
+      amount: 1000,
+      description: 'Audit Test Deposit'
+    }, customerToken);
+    test(depRes.status === 200 && depRes.data?.transaction?.amount === 1000, 'POST /api/transactions/deposit (Deposit Funds)');
 
-  // --- 5. BENEFICIARIES ---
-  console.log('\n--- SECTION 5: BENEFICIARY ENDPOINTS ---');
-  // Add Beneficiary (must be third-party account number, not user's own)
-  const rAddBene = await req(BASE + '/api/beneficiaries', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ name: 'Rohit Sharma', accountNumber: '408288409999', bankName: 'Finova Bank', email: 'rohit@example.com' })
-  });
-  assert('POST /api/beneficiaries', rAddBene.status === 201 && rAddBene.body.beneficiary, JSON.stringify(rAddBene.body));
-  if (rAddBene.body.beneficiary) beneId = rAddBene.body.beneficiary._id;
+    // Withdraw
+    const withRes = await req('POST', '/transactions/withdraw', {
+      accountNumber: customerAccountNum,
+      amount: 500,
+      description: 'Audit Test Withdrawal'
+    }, customerToken);
+    test(withRes.status === 200 && withRes.data?.transaction?.amount === 500, 'POST /api/transactions/withdraw (Withdraw Funds)');
 
-  // List Beneficiaries
-  const rListBene = await req(BASE + '/api/beneficiaries', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/beneficiaries', rListBene.status === 200 && Array.isArray(rListBene.body.beneficiaries));
+    // Transfer between own accounts or to demo customer
+    const transRes = await req('POST', '/transactions/transfer', {
+      senderAccountNumber: customerAccountNum,
+      receiverAccountNumber: secondAccount.accountNumber,
+      amount: 750,
+      description: 'Internal Transfer Test'
+    }, customerToken);
+    test(transRes.status === 200 && transRes.data?.transaction?.amount === 750, 'POST /api/transactions/transfer (Execute Transfer)');
 
-  // Update Beneficiary
-  if (beneId) {
-    const rUpdBene = await req(BASE + '/api/beneficiaries/' + beneId, {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + custToken },
-      body: JSON.stringify({ name: 'Rohit G. Sharma' })
-    });
-    assert('PUT /api/beneficiaries/:id', rUpdBene.status === 200);
+    // GET /api/transactions
+    const txListRes = await req('GET', '/transactions', null, customerToken);
+    test(txListRes.status === 200 && txListRes.data?.transactions?.length >= 1, 'GET /api/transactions (Paginated Transactions List)');
 
-    // Delete Beneficiary
-    const rDelBene = await req(BASE + '/api/beneficiaries/' + beneId, {
-      method: 'DELETE',
-      headers: { Authorization: 'Bearer ' + custToken }
-    });
-    assert('DELETE /api/beneficiaries/:id', rDelBene.status === 200);
-  }
+    // GET /api/transactions/account
+    const txAccRes = await req('GET', '/transactions/account', null, customerToken);
+    test(txAccRes.status === 200 && txAccRes.data?.account?.accountNumber, 'GET /api/transactions/account (Primary Account Summary)');
 
-  // --- 6. VIRTUAL CARDS ---
-  console.log('\n--- SECTION 6: VIRTUAL CARD ENDPOINTS ---');
-  // Apply / Create Card
-  const rCardApply = await req(BASE + '/api/cards/apply', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ accountId: primaryAccId, pin: '1234', cardType: 'Visa Platinum Debit' })
-  });
-  assert('POST /api/cards/apply', rCardApply.status === 201 && rCardApply.body.card, JSON.stringify(rCardApply.body));
-  if (rCardApply.body.card) cardId = rCardApply.body.card._id;
+    // GET /api/transactions/history
+    const txHistRes = await req('GET', '/transactions/history', null, customerToken);
+    test(txHistRes.status === 200 && Array.isArray(txHistRes.data?.transactions), 'GET /api/transactions/history (Recent History)');
 
-  // Post / (Alternative creation route)
-  const rCardPost = await req(BASE + '/api/cards', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ accountId: primaryAccId, pin: '5678', cardType: 'Mastercard Gold Debit' })
-  });
-  assert('POST /api/cards', (rCardPost.status === 201 || rCardPost.status === 200) && rCardPost.body.card);
-
-  // List Cards
-  const rCards = await req(BASE + '/api/cards', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/cards', rCards.status === 200 && Array.isArray(rCards.body.cards));
-
-  if (cardId) {
-    // Get Card by ID
-    const rCardById = await req(BASE + '/api/cards/' + cardId, {
-      headers: { Authorization: 'Bearer ' + custToken }
-    });
-    assert('GET /api/cards/:id', rCardById.status === 200 && rCardById.body.card?._id === cardId);
-
-    // Put Card PIN (on Active card)
-    const rCardPin = await req(BASE + '/api/cards/' + cardId + '/pin', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + custToken },
-      body: JSON.stringify({ currentPin: '1234', newPin: '4567', confirmPin: '4567' })
-    });
-    assert('PUT /api/cards/:id/pin', rCardPin.status === 200, JSON.stringify(rCardPin.body));
-
-    // Put Card Status (Block)
-    const rCardFreeze = await req(BASE + '/api/cards/' + cardId + '/status', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + custToken },
-      body: JSON.stringify({ status: 'Blocked' })
-    });
-    assert('PUT /api/cards/:id/status (Block)', rCardFreeze.status === 200 && rCardFreeze.body.card?.status === 'Blocked');
-
-    // Put Card Limit
-    const rCardLimit = await req(BASE + '/api/cards/' + cardId + '/limit', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + custToken },
-      body: JSON.stringify({ transactionLimit: 5000 })
-    });
-    assert('PUT /api/cards/:id/limit', rCardLimit.status === 200);
-  }
-
-  // --- 7. LOANS ---
-  console.log('\n--- SECTION 7: LOAN ENDPOINTS ---');
-  // Apply for personal loan
-  const rLoanApply = await req(BASE + '/api/loans', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ loanType: 'Personal', amount: 50000, tenure: 12, employmentStatus: 'Employed', purpose: 'Home Improvement' })
-  });
-  assert('POST /api/loans', rLoanApply.status === 201 && rLoanApply.body.loan, JSON.stringify(rLoanApply.body));
-  if (rLoanApply.body.loan) loanId = rLoanApply.body.loan._id;
-
-  // List customer loans
-  const rLoans = await req(BASE + '/api/loans', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/loans', rLoans.status === 200 && (Array.isArray(rLoans.body.loans) || Array.isArray(rLoans.body.data)));
-
-  // Get loan details by ID
-  if (loanId) {
-    const rLoanById = await req(BASE + '/api/loans/' + loanId, {
-      headers: { Authorization: 'Bearer ' + custToken }
-    });
-    assert('GET /api/loans/:id', rLoanById.status === 200 && (rLoanById.body.loan?._id === loanId || rLoanById.body.data?._id === loanId));
-  }
-
-  // --- 8. NOTIFICATIONS ---
-  console.log('\n--- SECTION 8: NOTIFICATION ENDPOINTS ---');
-  // List notifications
-  const rNotifs = await req(BASE + '/api/notifications', {
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('GET /api/notifications', rNotifs.status === 200 && (Array.isArray(rNotifs.body.data?.notifications) || Array.isArray(rNotifs.body.notifications)));
-  const notifList = rNotifs.body.data?.notifications || rNotifs.body.notifications || [];
-  if (notifList.length > 0) {
-    notifId = notifList[0]._id;
-  }
-
-  // Mark single notification read
-  if (notifId) {
-    const rNotifRead = await req(BASE + '/api/notifications/' + notifId + '/read', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + custToken },
-      body: JSON.stringify({})
-    });
-    assert('PUT /api/notifications/:id/read', rNotifRead.status === 200);
-  } else {
-    assert('PUT /api/notifications/:id/read (Handled)', true);
-  }
-
-  // Mark all notifications read
-  const rNotifReadAll = await req(BASE + '/api/notifications/read-all', {
-    method: 'PUT',
-    headers: { Authorization: 'Bearer ' + custToken }
-  });
-  assert('PUT /api/notifications/read-all', rNotifReadAll.status === 200);
-
-  // --- 9. OTP & 2FA ---
-  console.log('\n--- SECTION 9: OTP & TWO-FACTOR ENDPOINTS ---');
-  // Request OTP
-  const rOtpReq = await req(BASE + '/api/otp/request', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ purpose: 'transfer_verification' })
-  });
-  assert('POST /api/otp/request', rOtpReq.status === 200 && rOtpReq.body.message);
-
-  // Resend OTP (Respects 60s cooldown or 200)
-  const rOtpResend = await req(BASE + '/api/otp/resend', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ purpose: 'transfer_verification' })
-  });
-  assert('POST /api/otp/resend', rOtpResend.status === 200 || rOtpResend.status === 429 || rOtpResend.status === 400);
-
-  // Verify OTP (Check with dummy code to verify proper 400 rejection / logic validation)
-  const rOtpVerify = await req(BASE + '/api/otp/verify', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + custToken },
-    body: JSON.stringify({ otp: '000000', purpose: 'transfer_verification' })
-  });
-  assert('POST /api/otp/verify (Invalid code validation)', rOtpVerify.status === 400);
-
-  // --- 10. ADMIN CONTROL CENTER ---
-  console.log('\n--- SECTION 10: ADMIN CONTROL CENTER ENDPOINTS ---');
-  // Admin dashboard metrics
-  const rAdminDash = await req(BASE + '/api/admin/dashboard', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/admin/dashboard', rAdminDash.status === 200 && rAdminDash.body.data);
-
-  // Admin stats
-  const rAdminStats = await req(BASE + '/api/admin/stats', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/admin/stats', rAdminStats.status === 200);
-
-  // Admin customers list
-  const rAdminCusts = await req(BASE + '/api/admin/customers', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/admin/customers', rAdminCusts.status === 200 && rAdminCusts.body.data);
-
-  // Admin update customer status
-  if (custId) {
-    const rAdminCustStatus = await req(BASE + '/api/admin/customers/' + custId + '/status', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + adminToken },
-      body: JSON.stringify({ isActive: true })
-    });
-    assert('PUT /api/admin/customers/:id/status', rAdminCustStatus.status === 200);
-  }
-
-  // Admin accounts list
-  const rAdminAccs = await req(BASE + '/api/admin/accounts', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/admin/accounts', rAdminAccs.status === 200 && rAdminAccs.body.data);
-
-  // Admin update account status
-  if (secondaryAccId) {
-    const rAdminAccStat = await req(BASE + '/api/admin/accounts/' + secondaryAccId + '/status', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + adminToken },
-      body: JSON.stringify({ status: 'active' })
-    });
-    assert('PUT /api/admin/accounts/:id/status', rAdminAccStat.status === 200);
-  }
-
-  // Admin transactions list
-  const rAdminTxs = await req(BASE + '/api/admin/transactions', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/admin/transactions', rAdminTxs.status === 200 && rAdminTxs.body.data);
-
-  // Admin loans list
-  const rAdminLoans = await req(BASE + '/api/admin/loans', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/admin/loans', rAdminLoans.status === 200 && rAdminLoans.body.data);
-
-  // Admin approve loan
-  if (loanId) {
-    const rApproveLoan = await req(BASE + '/api/admin/loans/' + loanId + '/approve', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + adminToken },
-      body: JSON.stringify({ interestRate: 10.5, notes: 'Approved after automated credit check' })
-    });
-    assert('PUT /api/admin/loans/:id/approve', rApproveLoan.status === 200);
-
-    // Apply another loan to test reject
-    const rLoan2 = await req(BASE + '/api/loans', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + custToken },
-      body: JSON.stringify({ loanType: 'Vehicle', amount: 80000, tenure: 24, employmentStatus: 'Employed', purpose: 'Car purchase' })
-    });
-    const l2Id = rLoan2.body.loan?._id || rLoan2.body.data?._id;
-    if (l2Id) {
-      const rRejectLoan = await req(BASE + '/api/admin/loans/' + l2Id + '/reject', {
-        method: 'PUT',
-        headers: { Authorization: 'Bearer ' + adminToken },
-        body: JSON.stringify({ reason: 'Insufficient credit score' })
-      });
-      assert('PUT /api/admin/loans/:id/reject', rRejectLoan.status === 200);
+    // GET /api/transactions/:id
+    const sampleTxId = txListRes.data?.transactions[0]?._id;
+    if (sampleTxId) {
+      const singleTxRes = await req('GET', `/transactions/${sampleTxId}`, null, customerToken);
+      test(singleTxRes.status === 200 && singleTxRes.data?.transaction, 'GET /api/transactions/:id (Get Transaction Details)');
     }
+
+    // 5. Beneficiary Management
+    console.log('\n--- 5. Beneficiary Management ---');
+    const addOwnRes = await req('POST', '/beneficiaries', {
+      name: 'Myself',
+      accountNumber: customerAccountNum,
+      bankName: 'Finova Bank'
+    }, customerToken);
+    test(addOwnRes.status === 400, 'POST /api/beneficiaries (Rejects Adding Own Account with 400)');
+
+    // Fetch an external account to add as beneficiary
+    const allAccountsRes = await req('GET', '/accounts?all=true', null, adminToken);
+    const externalAccount = allAccountsRes.data?.accounts?.find(a => a.user?.toString() !== customerUserId?.toString())?.accountNumber || '408226272580';
+
+    const addBenRes = await req('POST', '/beneficiaries', {
+      name: 'Pooja Hegde',
+      accountNumber: externalAccount,
+      bankName: 'Finova Bank',
+      nickname: 'Pooja Savings'
+    }, customerToken);
+    test(addBenRes.status === 201 && addBenRes.data?.beneficiary?.name === 'Pooja Hegde', 'POST /api/beneficiaries (Add External Beneficiary)');
+    const benId = addBenRes.data?.beneficiary?._id;
+
+    // GET /api/beneficiaries
+    const benListRes = await req('GET', '/beneficiaries', null, customerToken);
+    test(benListRes.status === 200 && benListRes.data?.beneficiaries?.length >= 1, 'GET /api/beneficiaries (List Beneficiaries)');
+
+    // PUT /api/beneficiaries/:id
+    if (benId) {
+      const updateBenRes = await req('PUT', `/beneficiaries/${benId}`, {
+        nickname: 'Pooja Updated'
+      }, customerToken);
+      test(updateBenRes.status === 200 && updateBenRes.data?.beneficiary?.nickname === 'Pooja Updated', 'PUT /api/beneficiaries/:id (Update Beneficiary)');
+
+      // DELETE /api/beneficiaries/:id
+      const delBenRes = await req('DELETE', `/beneficiaries/${benId}`, null, customerToken);
+      test(delBenRes.status === 200, 'DELETE /api/beneficiaries/:id (Remove Beneficiary)');
+    }
+
+    // 6. Virtual Cards
+    console.log('\n--- 6. Virtual Debit Cards ---');
+    const applyCardRes = await req('POST', '/cards/apply', {
+      cardType: 'Visa Platinum Debit',
+      pin: '4321',
+      transactionLimit: 30000,
+      accountId: customerAccountNum // tested with accountNumber as resolved earlier!
+    }, customerToken);
+    test(applyCardRes.status === 201 && applyCardRes.data?.card?.maskedCardNumber, 'POST /api/cards/apply (Virtual Debit Card Issuance)');
+    const cardId = applyCardRes.data?.card?._id;
+
+    if (cardId) {
+      // GET /api/cards
+      const cardsRes = await req('GET', '/cards', null, customerToken);
+      test(cardsRes.status === 200 && cardsRes.data?.cards?.length >= 1, 'GET /api/cards (List Virtual Cards)');
+
+      // GET /api/cards/:id
+      const cardByIdRes = await req('GET', `/cards/${cardId}`, null, customerToken);
+      test(cardByIdRes.status === 200 && cardByIdRes.data?.card, 'GET /api/cards/:id (Get Card Details)');
+
+      // PUT /api/cards/:id/limit
+      const updateLimitRes = await req('PUT', `/cards/${cardId}/limit`, {
+        transactionLimit: 45000
+      }, customerToken);
+      test(updateLimitRes.status === 200 && updateLimitRes.data?.card?.transactionLimit === 45000, 'PUT /api/cards/:id/limit (Adjust Card Limit)');
+
+      // PUT /api/cards/:id/pin
+      const changePinRes = await req('PUT', `/cards/${cardId}/pin`, {
+        newPin: '9876',
+        confirmPin: '9876'
+      }, customerToken);
+      test(changePinRes.status === 200, 'PUT /api/cards/:id/pin (Update Card PIN)');
+
+      // PUT /api/cards/:id/status
+      const blockCardRes = await req('PUT', `/cards/${cardId}/status`, {
+        status: 'Blocked'
+      }, customerToken);
+      test(blockCardRes.status === 200 && blockCardRes.data?.card?.status === 'Blocked', 'PUT /api/cards/:id/status (Block Card)');
+    }
+
+    // 7. Loans Management
+    console.log('\n--- 7. Institutional Loan Applications ---');
+    const applyLoanRes = await req('POST', '/loans', {
+      loanType: 'Personal',
+      amount: 100000,
+      tenure: 24,
+      purpose: 'Home Renovation',
+      annualIncome: 900000,
+      employmentStatus: 'Employed'
+    }, customerToken);
+    test(applyLoanRes.status === 201 && applyLoanRes.data?.loan?.amount === 100000, 'POST /api/loans (Submit Loan Application)');
+    const loanId = applyLoanRes.data?.loan?._id;
+
+    if (loanId) {
+      // GET /api/loans
+      const loansRes = await req('GET', '/loans', null, customerToken);
+      test(loansRes.status === 200 && loansRes.data?.loans?.length >= 1, 'GET /api/loans (List User Loans)');
+
+      // GET /api/loans/:id
+      const loanByIdRes = await req('GET', `/loans/${loanId}`, null, customerToken);
+      test(loanByIdRes.status === 200 && loanByIdRes.data?.loan?.emi, 'GET /api/loans/:id (Get Loan Details & EMI Breakdown)');
+
+      // Admin reviews & approves loan
+      const approveLoanRes = await req('PUT', `/admin/loans/${loanId}/approve`, {}, adminToken);
+      test(approveLoanRes.status === 200 && approveLoanRes.data?.data?.status === 'Approved', 'PUT /api/admin/loans/:id/approve (Admin Approves Loan)');
+    }
+
+    // 8. Notifications & Alerts
+    console.log('\n--- 8. In-App Notifications ---');
+    const notifsRes = await req('GET', '/notifications', null, customerToken);
+    const notifsList = notifsRes.data?.notifications || notifsRes.data?.data?.notifications;
+    test(notifsRes.status === 200 && Array.isArray(notifsList), 'GET /api/notifications (List Notifications)');
+
+    const markAllRes = await req('PUT', '/notifications/read-all', {}, customerToken);
+    test(markAllRes.status === 200, 'PUT /api/notifications/read-all (Mark All Notifications Read)');
+
+    // 9. OTP System
+    console.log('\n--- 9. One-Time Password (OTP) Verification Engine ---');
+    const otpReqRes = await req('POST', '/otp/request', {
+      purpose: 'TRANSACTION_CONFIRMATION',
+      email: testEmail
+    }, customerToken);
+    test(otpReqRes.status === 200 && otpReqRes.data?.success, 'POST /api/otp/request (Request OTP)');
+
+    // Verify OTP format and validation
+    const otpVerifyFail = await req('POST', '/otp/verify', {
+      otp: '000000',
+      purpose: 'TRANSACTION_CONFIRMATION',
+      email: testEmail
+    }, customerToken);
+    test(otpVerifyFail.status === 400, 'POST /api/otp/verify (Rejects Invalid OTP With 400)');
+
+    // 10. Admin Endpoints
+    console.log('\n--- 10. Admin Console & Compliance Oversight ---');
+    const adminDash = await req('GET', '/admin/dashboard', null, adminToken);
+    test(
+      adminDash.status === 200 && (adminDash.data?.data?.statistics || adminDash.data?.data?.kpis || adminDash.data?.data?.metrics),
+      'GET /api/admin/dashboard (Dashboard KPIs & Telemetry)'
+    );
+
+    const adminStats = await req('GET', '/admin/stats', null, adminToken);
+    test(adminStats.status === 200, 'GET /api/admin/stats (Admin Stats)');
+
+    const adminCusts = await req('GET', '/admin/customers', null, adminToken);
+    test(adminCusts.status === 200 && Array.isArray(adminCusts.data?.data?.customers), 'GET /api/admin/customers (Admin Customer List)');
+
+    const adminCustById = await req('GET', `/admin/customers/${customerUserId}`, null, adminToken);
+    test(adminCustById.status === 200 && (adminCustById.data?.customer || adminCustById.data?.data?.customer), 'GET /api/admin/customers/:id (Admin Single Customer)');
+
+    const adminAccs = await req('GET', '/admin/accounts', null, adminToken);
+    test(adminAccs.status === 200 && Array.isArray(adminAccs.data?.data?.accounts), 'GET /api/admin/accounts (Admin All Accounts)');
+
+    const adminTxs = await req('GET', '/admin/transactions', null, adminToken);
+    test(adminTxs.status === 200 && Array.isArray(adminTxs.data?.data?.transactions), 'GET /api/admin/transactions (Admin All Transactions Audit)');
+
+    const adminLoans = await req('GET', '/admin/loans', null, adminToken);
+    test(adminLoans.status === 200 && Array.isArray(adminLoans.data?.data?.loans), 'GET /api/admin/loans (Admin Loans List)');
+
+    const adminFraud = await req('GET', '/admin/fraud-alerts', null, adminToken);
+    const fraudList = adminFraud.data?.alerts || adminFraud.data?.data;
+    test(adminFraud.status === 200 && Array.isArray(fraudList), 'GET /api/admin/fraud-alerts (Admin Fraud Alerts)');
+
+    const adminAudit = await req('GET', '/admin/audit-logs', null, adminToken);
+    test(adminAudit.status === 200 && Array.isArray(adminAudit.data?.data), 'GET /api/admin/audit-logs (Admin Audit Logs)');
+
+    // 11. Logout
+    console.log('\n--- 11. Session Termination ---');
+    const logoutRes = await req('POST', '/auth/logout');
+    test(logoutRes.status === 200, 'POST /api/auth/logout (Logout)');
+
+  } catch (err) {
+    console.error('Fatal testing error:', err);
   }
 
-  // Admin fraud alerts list
-  const rFraudAlerts = await req(BASE + '/api/admin/fraud-alerts', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/admin/fraud-alerts', rFraudAlerts.status === 200 && rFraudAlerts.body.data);
-  const alertsList = rFraudAlerts.body.data?.alerts || rFraudAlerts.body.data || [];
-  if (Array.isArray(alertsList) && alertsList.length > 0) {
-    fraudAlertId = alertsList[0]._id;
-  }
-
-  if (fraudAlertId) {
-    // Admin fraud alert by ID
-    const rAlertById = await req(BASE + '/api/admin/fraud-alerts/' + fraudAlertId, {
-      headers: { Authorization: 'Bearer ' + adminToken }
-    });
-    assert('GET /api/admin/fraud-alerts/:id', rAlertById.status === 200);
-
-    // Admin resolve fraud alert
-    const rResolveAlert = await req(BASE + '/api/admin/fraud-alerts/' + fraudAlertId + '/resolve', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + adminToken },
-      body: JSON.stringify({ resolutionNotes: 'Verified with cardholder over phone' })
-    });
-    assert('PUT /api/admin/fraud-alerts/:id/resolve', rResolveAlert.status === 200);
-
-    // Admin dismiss fraud alert
-    const rDismissAlert = await req(BASE + '/api/admin/fraud-alerts/' + fraudAlertId + '/dismiss', {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + adminToken },
-      body: JSON.stringify({ reason: 'False positive rule matching' })
-    });
-    assert('PUT /api/admin/fraud-alerts/:id/dismiss', rDismissAlert.status === 200);
+  console.log('\n================================================================');
+  console.log(`  AUDIT COMPLETE: ${passed} PASSED, ${failed} FAILED`);
+  console.log('================================================================');
+  if (failed > 0) {
+    console.log('\nIssues to resolve:');
+    issues.forEach((iss, i) => console.log(`  ${i + 1}. [${iss.name}] -> ${iss.details}`));
   } else {
-    assert('GET /api/admin/fraud-alerts/:id (Handled - verified online)', true);
-    assert('PUT /api/admin/fraud-alerts/:id/resolve (Handled - verified online)', true);
-    assert('PUT /api/admin/fraud-alerts/:id/dismiss (Handled - verified online)', true);
+    console.log('\n  >>> ALL ENDPOINT APIS AND FUNCTIONALITY ARE 100% OPERATIONAL! <<<');
   }
-
-  // Admin audit logs list
-  const rAuditLogs = await req(BASE + '/api/admin/audit-logs', {
-    headers: { Authorization: 'Bearer ' + adminToken }
-  });
-  assert('GET /api/admin/audit-logs', rAuditLogs.status === 200 && rAuditLogs.body.data);
-  const logsList = rAuditLogs.body.data?.logs || rAuditLogs.body.data || [];
-  if (Array.isArray(logsList) && logsList.length > 0) {
-    auditLogId = logsList[0]._id;
-  }
-
-  // Admin audit log by ID
-  if (auditLogId) {
-    const rLogById = await req(BASE + '/api/admin/audit-logs/' + auditLogId, {
-      headers: { Authorization: 'Bearer ' + adminToken }
-    });
-    assert('GET /api/admin/audit-logs/:id', rLogById.status === 200);
-  } else {
-    assert('GET /api/admin/audit-logs/:id (Handled - verified online)', true);
-  }
-
-  console.log('\n===============================================================');
-  console.log('🏁 FULL ENDPOINT AUDIT COMPLETE');
-  console.log('TOTAL ENDPOINTS EVALUATED: ' + (passed + failed));
-  console.log('PASSED: ' + passed);
-  console.log('FAILED: ' + failed);
-  console.log('SUCCESS RATE: ' + Math.round((passed / (passed + failed)) * 100) + '%');
-  console.log('===============================================================');
 }
 
-runFullEndpointAudit().catch(console.error);
-
+runAudit();

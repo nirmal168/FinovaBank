@@ -5,8 +5,6 @@ import {
   TrendingUp,
   TrendingDown,
   Landmark,
-  ArrowDownLeft,
-  ArrowUpRight,
   ArrowLeftRight,
   Users,
   CreditCard,
@@ -44,22 +42,6 @@ import loanService from '../../services/loanService';
 
 const quickActions = [
   {
-    title: 'Deposit Funds',
-    description: 'Instant cash inflow',
-    icon: ArrowDownLeft,
-    to: '/deposit',
-    bg: 'bg-[var(--finova-card-bg)] text-[var(--finova-text-heading)] border-[var(--finova-border)] hover:border-[var(--finova-success)] hover:bg-[var(--finova-bg-secondary)]',
-    iconBg: 'bg-[var(--finova-success-bg)] text-[var(--finova-success)]',
-  },
-  {
-    title: 'Withdraw Funds',
-    description: 'ATM & cash payout',
-    icon: ArrowUpRight,
-    to: '/withdraw',
-    bg: 'bg-[var(--finova-card-bg)] text-[var(--finova-text-heading)] border-[var(--finova-border)] hover:border-[var(--finova-blue)] hover:bg-[var(--finova-bg-secondary)]',
-    iconBg: 'bg-[var(--finova-info-bg)] text-[var(--finova-info)]',
-  },
-  {
     title: 'Transfer Money',
     description: 'P2P & bank wires',
     icon: ArrowLeftRight,
@@ -90,6 +72,14 @@ const quickActions = [
     to: '/loans',
     bg: 'bg-[var(--finova-card-bg)] text-[var(--finova-text-heading)] border-[var(--finova-border)] hover:border-[var(--finova-success)] hover:bg-[var(--finova-bg-secondary)]',
     iconBg: 'bg-[var(--finova-success-bg)] text-[var(--finova-success)]',
+  },
+  {
+    title: 'Transactions',
+    description: 'View history',
+    icon: ArrowLeftRight,
+    to: '/transactions',
+    bg: 'bg-[var(--finova-card-bg)] text-[var(--finova-text-heading)] border-[var(--finova-border)] hover:border-[var(--finova-blue)] hover:bg-[var(--finova-bg-secondary)]',
+    iconBg: 'bg-[var(--finova-info-bg)] text-[var(--finova-info)]',
   },
 ];
 
@@ -332,16 +322,6 @@ const Dashboard = () => {
                 Send Money
               </Button>
             </Link>
-            <Link to="/deposit">
-              <Button
-                variant="primary"
-                size="md"
-                icon={ArrowDownLeft}
-                className="!bg-[var(--finova-blue)] hover:opacity-90 !text-white shadow-xs"
-              >
-                Deposit
-              </Button>
-            </Link>
             <Link to="/accounts">
               <Button
                 variant="outline"
@@ -574,8 +554,8 @@ const Dashboard = () => {
           <EmptyState
             title="No transactions yet"
             description="You have not completed any deposits, withdrawals, or transfers yet. Get started by funding your account."
-            actionLabel="Make a Deposit"
-            onAction={() => (window.location.href = '/deposit')}
+            actionLabel="Transfer Funds"
+            onAction={() => (window.location.href = '/transfer')}
           />
         ) : (
           <Table>

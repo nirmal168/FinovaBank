@@ -2,11 +2,14 @@ const User = require('../models/User');
 const Account = require('../models/Account');
 const Transaction = require('../models/Transaction');
 const Loan = require('../models/Loan');
+const Card = require('../models/Card');
 const FraudAlert = require('../models/FraudAlert');
 const AuditLog = require('../models/AuditLog');
 const generateTransactionId = require('../utils/generateTransactionId');
+const generateAccountNumber = require('../utils/generateAccountNumber');
 const { createNotification } = require('../utils/notificationService');
 const { logAuditEvent } = require('../utils/auditLogger');
+const emailService = require('../services/emailService');
 
 /**
  * @desc    Get aggregated administrative statistics & Recharts datasets
@@ -254,6 +257,32 @@ const getDashboardStats = async (req, res, next) => {
             recent: suspiciousTxList,
           },
         },
+        metrics: {
+          totalCustomers,
+          totalAccounts,
+          totalDeposits,
+          totalWithdrawals,
+          totalTransfers,
+          totalLoans,
+          pendingLoans,
+          suspiciousTransactions: {
+            count: suspiciousCount,
+            recent: suspiciousTxList,
+          },
+        },
+        kpis: {
+          totalCustomers,
+          totalAccounts,
+          totalDeposits,
+          totalWithdrawals,
+          totalTransfers,
+          totalLoans,
+          pendingLoans,
+          suspiciousTransactions: {
+            count: suspiciousCount,
+            recent: suspiciousTxList,
+          },
+        },
         charts: {
           monthlyTransactions,
           depositsVsWithdrawals,
@@ -279,7 +308,11 @@ const getAdminCustomers = async (req, res, next) => {
     const query = { role: 'customer' };
 
     if (status !== undefined && status !== '') {
-      query.isActive = status === 'active' || status === 'true';
+      if (['Active', 'Inactive', 'Frozen'].includes(status)) {
+        query.status = status;
+      } else {
+        query.isActive = status === 'active' || status === 'true';
+      }
     }
 
     if (search && search.trim()) {
@@ -288,6 +321,7 @@ const getAdminCustomers = async (req, res, next) => {
         { name: searchRegex },
         { email: searchRegex },
         { phone: searchRegex },
+        { customerId: searchRegex },
       ];
     }
 
@@ -307,7 +341,7 @@ const getAdminCustomers = async (req, res, next) => {
 
     // Attach account counts for each customer
     const userIds = customers.map((c) => c._id);
-    const accounts = await Account.find({ user: { $in: userIds } }).select('user status balance').lean();
+    const accounts = await Account.find({ user: { $in: userIds } }).select('user status balance accountNumber accountType').lean();
 
     const customersWithAccounts = customers.map((c) => {
       const userAccounts = accounts.filter((a) => a.user.toString() === c._id.toString());
@@ -335,20 +369,239 @@ const getAdminCustomers = async (req, res, next) => {
   }
 };
 
-// @desc    Activate or deactivate customer account
+// @desc    Admin creates a new customer with auto-generated customerId and temporary credentials
+// @route   POST /api/admin/customers
+// @access  Private (Admin)
+const createAdminCustomer = async (req, res, next) => {
+  try {
+    const { firstName, lastName, name, email, phone, initialDeposit = 0, address } = req.body;
+    const fullName = name ? name.trim() : `${firstName || ''} ${lastName || ''}`.trim();
+
+    if (!fullName || !email || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, and phone number are required to create a customer account.',
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const existingUser = await User.findOne({ email: cleanEmail });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'A user with this email address already exists.',
+      });
+    }
+
+    // Generate unique customerId (e.g., FIN-CUS-10025)
+    const customerId = await User.generateCustomerId();
+
+    // Generate secure temporary password
+    const tempPassword = `Finova@${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Create customer user
+    const customer = await User.create({
+      name: fullName,
+      email: cleanEmail,
+      phone: phone.trim(),
+      password: tempPassword,
+      role: 'customer',
+      customerId,
+      mustChangePassword: true,
+      createdBy: req.user._id,
+      status: 'Active',
+      isActive: true,
+      isVerified: true,
+      address: address || {},
+    });
+
+    // Create default bank account
+    let accountNumber = generateAccountNumber();
+    let accExists = await Account.findOne({ accountNumber });
+    while (accExists) {
+      accountNumber = generateAccountNumber();
+      accExists = await Account.findOne({ accountNumber });
+    }
+
+    const depositAmount = Math.max(0, Number(initialDeposit) || 0);
+
+    const account = await Account.create({
+      user: customer._id,
+      accountNumber,
+      accountType: 'Savings',
+      balance: depositAmount,
+      currency: 'INR',
+      status: 'Active',
+      dailyTransferLimit: 50000.0,
+    });
+
+    // If initial deposit > 0, create an audit deposit transaction
+    if (depositAmount > 0) {
+      await Transaction.create({
+        user: customer._id,
+        account: account._id,
+        senderAccount: 'BRANCH-CASH-DEPOSIT',
+        receiverAccount: accountNumber,
+        type: 'DEPOSIT',
+        amount: depositAmount,
+        currency: 'INR',
+        balanceAfter: depositAmount,
+        status: 'COMPLETED',
+        description: 'Initial deposit by Finova Admin during account creation',
+        reference: `INIT-DEP-${Date.now()}`,
+        transactionId: generateTransactionId ? generateTransactionId('DEP') : `TXN-DEP-${Date.now()}`,
+      });
+    }
+
+    // Notification for the new customer
+    await createNotification({
+      user: customer._id,
+      title: 'Welcome to Finova Digital Banking',
+      message: `Your Finova customer account (${customerId}) has been provisioned. Please rotate your temporary password upon first login.`,
+      type: 'ACCOUNT_ALERT',
+    });
+
+    // Send Welcome Email to customer
+    emailService.sendWelcomeEmail({
+      to: customer.email,
+      name: customer.name,
+      customerId: customer.customerId,
+    }).catch((err) => {
+      console.warn('[Admin] Notice: Welcome email delivery skipped or failed:', err.message);
+    });
+
+    // Audit log
+    await logAuditEvent({
+      user: req.user._id,
+      action: 'ADMIN_CREATE_CUSTOMER',
+      entity: 'User',
+      entityId: customer._id,
+      req,
+      metadata: {
+        customerId,
+        email: customer.email,
+        name: customer.name,
+        accountNumber,
+        initialDeposit: depositAmount,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Customer created successfully.',
+      customer: {
+        id: customer._id,
+        _id: customer._id,
+        customerId: customer.customerId,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        role: customer.role,
+        status: customer.status,
+        isActive: customer.isActive,
+        mustChangePassword: customer.mustChangePassword,
+        createdAt: customer.createdAt,
+      },
+      temporaryPassword: tempPassword,
+      account,
+      credentials: {
+        customerId: customer.customerId,
+        email: customer.email,
+        temporaryPassword: tempPassword,
+        accountNumber: account.accountNumber,
+        initialDeposit: depositAmount,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get complete details of a customer by ID
+// @route   GET /api/admin/customers/:id
+// @access  Private (Admin)
+const getAdminCustomerById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const customer = await User.findOne({ _id: id, role: 'customer' }).select('-password').lean();
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found',
+      });
+    }
+
+    const [accounts, loans, recentTransactions] = await Promise.all([
+      Account.find({ user: customer._id }).lean(),
+      Loan.find({ user: customer._id }).sort({ createdAt: -1 }).lean(),
+      Transaction.find({ user: customer._id }).sort({ createdAt: -1 }).limit(15).lean(),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      customer,
+      data: {
+        customer,
+        accounts,
+        loans,
+        recentTransactions,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Reset customer password with a new temporary password
+// @route   POST /api/admin/customers/:id/reset-password
+// @access  Private (Admin)
+const resetCustomerPassword = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const customer = await User.findOne({ _id: id, role: 'customer' });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found',
+      });
+    }
+
+    const tempPassword = `Finova@${Math.floor(1000 + Math.random() * 9000)}`;
+    customer.password = tempPassword;
+    customer.mustChangePassword = true;
+    await customer.save();
+
+    await logAuditEvent({
+      user: req.user._id,
+      action: 'ADMIN_RESET_CUSTOMER_PASSWORD',
+      entity: 'User',
+      entityId: customer._id,
+      req,
+      metadata: {
+        customerEmail: customer.email,
+        customerId: customer.customerId,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Temporary password generated successfully.',
+      temporaryPassword: tempPassword,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Activate or deactivate or freeze customer account
 // @route   PUT /api/admin/customers/:id/status
 // @access  Private (Admin)
 const updateCustomerStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { isActive } = req.body;
-
-    if (typeof isActive !== 'boolean') {
-      return res.status(400).json({
-        success: false,
-        message: 'isActive boolean flag is required',
-      });
-    }
+    const { isActive, status } = req.body;
 
     const customer = await User.findOne({ _id: id, role: 'customer' });
     if (!customer) {
@@ -358,7 +611,25 @@ const updateCustomerStatus = async (req, res, next) => {
       });
     }
 
-    customer.isActive = isActive;
+    if (status !== undefined) {
+      if (!['Active', 'Inactive', 'Frozen'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Status must be Active, Inactive, or Frozen',
+        });
+      }
+      customer.status = status;
+      customer.isActive = status === 'Active';
+    } else if (typeof isActive === 'boolean') {
+      customer.isActive = isActive;
+      customer.status = isActive ? 'Active' : 'Inactive';
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'status or isActive is required',
+      });
+    }
+
     await customer.save();
 
     // Audit log ADMIN_CUSTOMER_STATUS event
@@ -371,17 +642,29 @@ const updateCustomerStatus = async (req, res, next) => {
       metadata: {
         customerEmail: customer.email,
         customerName: customer.name,
-        isActive,
+        customerId: customer.customerId,
+        status: customer.status,
+        isActive: customer.isActive,
       },
     });
 
     res.status(200).json({
       success: true,
-      message: `Customer account successfully ${isActive ? 'activated' : 'deactivated'}`,
-      data: {
+      message: `Customer status updated to ${customer.status}`,
+      customer: {
         id: customer._id,
+        customerId: customer.customerId,
         name: customer.name,
         email: customer.email,
+        status: customer.status,
+        isActive: customer.isActive,
+      },
+      data: {
+        id: customer._id,
+        customerId: customer.customerId,
+        name: customer.name,
+        email: customer.email,
+        status: customer.status,
         isActive: customer.isActive,
       },
     });
@@ -666,6 +949,26 @@ const approveLoan = async (req, res, next) => {
       });
     }
 
+    // Send Loan Approval Email
+    if (loan.user && loan.user.email) {
+      emailService.sendLoanStatusEmail({
+        to: loan.user.email,
+        name: loan.user.name,
+        loan: {
+          _id: loan._id,
+          loanType: loan.loanType,
+          status: 'APPROVED',
+          amount: loan.amount,
+          interestRate: loan.interestRate,
+          termMonths: loan.termMonths,
+          monthlyPayment: loan.monthlyPayment,
+        },
+        userPreferences: loan.user.emailPreferences,
+      }).catch((err) => {
+        console.warn('[Admin] Loan approval email dispatch skipped/failed:', err.message);
+      });
+    }
+
     // Audit log LOAN_APPROVE event
     await logAuditEvent({
       user: req.user._id,
@@ -724,6 +1027,25 @@ const rejectLoan = async (req, res, next) => {
         title: 'Loan Application Update',
         message: `Your ${loan.loanType} loan application was not approved. Underwriting notes: ${reason || 'Criteria not met'}.`,
         type: 'LOAN',
+      });
+    }
+
+    // Send Loan Rejection Email
+    if (loan.user && loan.user.email) {
+      emailService.sendLoanStatusEmail({
+        to: loan.user.email,
+        name: loan.user.name,
+        loan: {
+          _id: loan._id,
+          loanType: loan.loanType,
+          status: 'REJECTED',
+          amount: loan.amount,
+          interestRate: loan.interestRate,
+          termMonths: loan.termMonths,
+        },
+        userPreferences: loan.user.emailPreferences,
+      }).catch((err) => {
+        console.warn('[Admin] Loan rejection email dispatch skipped/failed:', err.message);
       });
     }
 
@@ -809,6 +1131,7 @@ const getAdminFraudAlerts = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
+      alerts,
       data: alerts,
       pagination: {
         page,
@@ -1165,12 +1488,344 @@ const getAdminAuditLogById = async (req, res, next) => {
   }
 };
 
+// @desc    Get all issued cards with search, filter, pagination
+// @route   GET /api/admin/cards
+// @access  Private (Admin)
+const getAdminCards = async (req, res, next) => {
+  try {
+    const { search, status, page = 1, limit = 10 } = req.query;
+    const query = {};
+
+    if (status && status !== 'ALL') {
+      query.status = status;
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      const users = await User.find({
+        $or: [
+          { name: { $regex: q, $options: 'i' } },
+          { email: { $regex: q, $options: 'i' } },
+          { customerId: { $regex: q, $options: 'i' } },
+        ],
+      }).select('_id');
+      const userIds = users.map((u) => u._id);
+
+      const accounts = await Account.find({
+        accountNumber: { $regex: q, $options: 'i' },
+      }).select('_id');
+      const accountIds = accounts.map((a) => a._id);
+
+      query.$or = [
+        { lastFour: { $regex: q, $options: 'i' } },
+        { cardType: { $regex: q, $options: 'i' } },
+        { cardholderName: { $regex: q, $options: 'i' } },
+        ...(userIds.length > 0 ? [{ user: { $in: userIds } }] : []),
+        ...(accountIds.length > 0 ? [{ account: { $in: accountIds } }] : []),
+      ];
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [cards, total, activeCount, blockedCount, pendingCount] = await Promise.all([
+      Card.find(query)
+        .populate('user', 'name email customerId phone')
+        .populate('account', 'accountNumber accountType balance currency status')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Card.countDocuments(query),
+      Card.countDocuments({ status: 'Active' }),
+      Card.countDocuments({ status: 'Blocked' }),
+      Card.countDocuments({ status: 'Pending' }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      cards,
+      data: {
+        cards,
+        stats: {
+          total,
+          activeCount,
+          blockedCount,
+          pendingCount,
+        },
+        pagination: {
+          total,
+          page: pageNum,
+          pages: Math.ceil(total / limitNum) || 1,
+          limit: limitNum,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Admin issues a virtual debit card for a customer
+// @route   POST /api/admin/cards
+// @access  Private (Admin)
+const issueAdminCard = async (req, res, next) => {
+  try {
+    const { userId, customerId, accountId, accountNumber, cardType, pin, transactionLimit } = req.body;
+
+    // Find customer
+    let customer;
+    if (userId) {
+      customer = await User.findById(userId);
+    } else if (customerId) {
+      customer = await User.findOne({ customerId: customerId.toUpperCase().trim() });
+    }
+
+    // Find account
+    let account;
+    if (accountId) {
+      account = await Account.findById(accountId);
+    } else if (accountNumber) {
+      account = await Account.findOne({ accountNumber: accountNumber.trim() });
+    }
+
+    if (!customer && account) {
+      customer = await User.findById(account.user);
+    }
+
+    if (!account && customer) {
+      account = await Account.findOne({ user: customer._id, status: 'Active' });
+      if (!account) {
+        account = await Account.getOrCreateUserAccount(customer._id);
+      }
+    }
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found. Please provide a valid customerId or account.',
+      });
+    }
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'No bank account found for this customer.',
+      });
+    }
+
+    // Generate random 4-digit PIN if not provided
+    const cardPin = (pin && /^\d{4}$/.test(pin)) ? pin : String(Math.floor(1000 + Math.random() * 9000));
+    const hashedPin = await Card.hashPin(cardPin);
+
+    // Random last 4
+    const randomLastFour = Math.floor(1000 + Math.random() * 9000).toString();
+    const isMastercard = cardType && cardType.toLowerCase().includes('mastercard');
+    const prefix = isMastercard ? '5412' : '4532';
+    const maskedCardNumber = `${prefix} •••• •••• ${randomLastFour}`;
+
+    // Expiry: 4 years
+    const now = new Date();
+    const expiryMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const expiryYear = String((now.getFullYear() + 4) % 100).padStart(2, '0');
+    const expiryDate = `${expiryMonth}/${expiryYear}`;
+
+    const limit = transactionLimit ? Number(transactionLimit) : 50000;
+
+    const card = await Card.create({
+      user: customer._id,
+      account: account._id,
+      maskedCardNumber,
+      lastFour: randomLastFour,
+      cardType: cardType || 'Visa Platinum Debit',
+      cardholderName: customer.name,
+      expiryDate,
+      pin: hashedPin,
+      status: 'Active',
+      transactionLimit: limit,
+    });
+
+    await card.populate('user', 'name email customerId phone');
+    await card.populate('account', 'accountNumber accountType balance currency status');
+
+    // Notify customer
+    await createNotification({
+      user: customer._id,
+      title: 'New Virtual Card Issued',
+      message: `Finova Administrator has issued a new ${card.cardType} (ending in ${randomLastFour}) linked to account #${account.accountNumber}. Default PIN: ${cardPin}.`,
+      type: 'CARD',
+    });
+
+    // Audit log
+    await logAuditEvent({
+      user: req.user._id,
+      action: 'ADMIN_CARD_ISSUE',
+      entity: 'Card',
+      entityId: card._id,
+      req,
+      metadata: {
+        customerId: customer.customerId,
+        accountNumber: account.accountNumber,
+        cardType: card.cardType,
+        lastFour: card.lastFour,
+        limit,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Virtual debit card issued successfully!',
+      card,
+      issuedPin: cardPin,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Admin block / activate customer card
+// @route   PUT /api/admin/cards/:id/status
+// @access  Private (Admin)
+const updateAdminCardStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['Active', 'Blocked', 'Inactive', 'Pending'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status must be Active, Blocked, Inactive, or Pending',
+      });
+    }
+
+    const card = await Card.findById(id);
+    if (!card) {
+      return res.status(404).json({
+        success: false,
+        message: 'Card not found',
+      });
+    }
+
+    const previousStatus = card.status;
+    card.status = status;
+    await card.save();
+
+    await card.populate('user', 'name email customerId');
+    await card.populate('account', 'accountNumber');
+
+    // Build customer notification message based on transition type
+    let notifTitle, notifMessage;
+    if (previousStatus === 'Pending' && status === 'Active') {
+      notifTitle = '🎉 Your Card Has Been Issued!';
+      notifMessage = `Great news! Your debit card application (${card.cardType} ending in ${card.lastFour}) has been approved and issued by Finova Administration. Your card is now active and ready to use.`;
+    } else {
+      notifTitle = `Card ${status}`;
+      notifMessage = `Your debit card ending in ${card.lastFour} has been updated to "${status}" by Finova Administration.`;
+    }
+
+    // Notify customer
+    await createNotification({
+      user: card.user._id,
+      title: notifTitle,
+      message: notifMessage,
+      type: 'CARD',
+    });
+
+    // Audit log
+    await logAuditEvent({
+      user: req.user._id,
+      action: 'ADMIN_CARD_STATUS',
+      entity: 'Card',
+      entityId: card._id,
+      req,
+      metadata: {
+        cardId: card._id,
+        lastFour: card.lastFour,
+        previousStatus,
+        status,
+        issuedFromApplication: previousStatus === 'Pending' && status === 'Active',
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: previousStatus === 'Pending' && status === 'Active'
+        ? `Card successfully issued and activated for ${card.user?.name || 'customer'}`
+        : `Card status updated to ${status}`,
+      card,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Admin adjust customer card transaction limit
+// @route   PUT /api/admin/cards/:id/limit
+// @access  Private (Admin)
+const updateAdminCardLimit = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { transactionLimit } = req.body;
+
+    const numLimit = Number(transactionLimit);
+    if (isNaN(numLimit) || numLimit < 100 || numLimit > 500000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction limit must be between ₹100.00 and ₹5,00,000.00',
+      });
+    }
+
+    const card = await Card.findById(id);
+    if (!card) {
+      return res.status(404).json({
+        success: false,
+        message: 'Card not found',
+      });
+    }
+
+    card.transactionLimit = numLimit;
+    await card.save();
+
+    await card.populate('user', 'name email customerId');
+
+    // Audit log
+    await logAuditEvent({
+      user: req.user._id,
+      action: 'ADMIN_CARD_LIMIT',
+      entity: 'Card',
+      entityId: card._id,
+      req,
+      metadata: {
+        cardId: card._id,
+        lastFour: card.lastFour,
+        newLimit: numLimit,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Daily transaction limit updated to ₹${numLimit.toLocaleString('en-IN')}`,
+      card,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getAdminCustomers,
+  createAdminCustomer,
+  getAdminCustomerById,
+  resetCustomerPassword,
   updateCustomerStatus,
   getAdminAccounts,
   updateAccountStatus,
+  getAdminCards,
+  issueAdminCard,
+  updateAdminCardStatus,
+  updateAdminCardLimit,
   getAdminTransactions,
   getAdminLoans,
   approveLoan,

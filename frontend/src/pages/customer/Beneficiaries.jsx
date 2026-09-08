@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import beneficiaryService from '../../services/beneficiaryService';
+import transactionService from '../../services/transactionService';
 import Card, { CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -46,6 +47,9 @@ const Beneficiaries = () => {
   });
   const [addError, setAddError] = useState('');
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
+  const [verifyingAccount, setVerifyingAccount] = useState(false);
+  const [verifiedAccountInfo, setVerifiedAccountInfo] = useState(null);
+  const [verifyAccountError, setVerifyAccountError] = useState('');
 
   // Edit Beneficiary Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -107,7 +111,37 @@ const Beneficiaries = () => {
       nickname: '',
     });
     setAddError('');
+    setVerifiedAccountInfo(null);
+    setVerifyAccountError('');
     setIsAddModalOpen(true);
+  };
+
+  const handleVerifyBeneficiaryAccount = async (accountNum) => {
+    const target = (accountNum || addForm.accountNumber)?.trim();
+    if (!target || target.length < 8) {
+      setVerifyAccountError('Please enter at least 8 digits to verify.');
+      return;
+    }
+
+    try {
+      setVerifyingAccount(true);
+      setVerifyAccountError('');
+      const data = await transactionService.lookupReceiver(target);
+      if (data?.account) {
+        setVerifiedAccountInfo(data.account);
+        // Auto-populate name if not entered yet
+        if (!addForm.name && data.account.user?.name) {
+          setAddForm((prev) => ({ ...prev, name: data.account.user.name }));
+        }
+      }
+    } catch (err) {
+      setVerifiedAccountInfo(null);
+      setVerifyAccountError(
+        'Account not found in Finova Bank. Finova accounts are 12 digits (e.g. 408234977525).'
+      );
+    } finally {
+      setVerifyingAccount(false);
+    }
   };
 
   const handleCreateBeneficiary = async (e) => {
@@ -437,22 +471,103 @@ const Beneficiaries = () => {
             </div>
           )}
 
-          <Input
-            label="Beneficiary Full Name"
-            placeholder="e.g. Sarah Connor"
-            value={addForm.name}
-            onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-            required
-          />
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+            <p className="font-semibold text-slate-700">💡 Finova Transfer Tip:</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              For instant transfers within Finova, the payee must have an active 12-digit Finova account (format: <span className="font-mono font-bold text-slate-700">4082XXXXXXXX</span>).
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setAddForm({
+                  ...addForm,
+                  accountNumber: '408234977525',
+                  name: 'Sarah Jenkins',
+                  bankName: 'Finova',
+                });
+                handleVerifyBeneficiaryAccount('408234977525');
+              }}
+              className="mt-1.5 text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline"
+            >
+              + Use Demo Customer: Sarah Jenkins (408234977525)
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              12-Digit Account Number
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. 408234977525"
+                value={addForm.accountNumber}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  setAddForm({ ...addForm, accountNumber: val });
+                  if (val.length === 12) {
+                    handleVerifyBeneficiaryAccount(val);
+                  } else {
+                    setVerifiedAccountInfo(null);
+                    setVerifyAccountError('');
+                  }
+                }}
+                maxLength={12}
+                className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs font-mono font-semibold focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                required
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleVerifyBeneficiaryAccount()}
+                isLoading={verifyingAccount}
+              >
+                Verify
+              </Button>
+            </div>
+          </div>
+
+          {/* Verification Status */}
+          {verifiedAccountInfo && (
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              <div>
+                <span className="font-bold">{verifiedAccountInfo.user?.name}</span>
+                <span className="text-emerald-700 ml-1">({verifiedAccountInfo.accountType} Account • {verifiedAccountInfo.status})</span>
+              </div>
+            </div>
+          )}
+
+          {verifyAccountError && (
+            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+              <div>
+                <p>{verifyAccountError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddForm({
+                      ...addForm,
+                      accountNumber: '408234977525',
+                      name: 'Sarah Jenkins',
+                      bankName: 'Finova',
+                    });
+                    handleVerifyBeneficiaryAccount('408234977525');
+                  }}
+                  className="mt-1 text-[11px] font-bold text-brand-600 hover:underline"
+                >
+                  Click here to use Demo Customer (408234977525)
+                </button>
+              </div>
+            </div>
+          )}
 
           <Input
-            label="12-Digit Account Number"
-            placeholder="e.g. 408259933641"
-            value={addForm.accountNumber}
-            onChange={(e) =>
-              setAddForm({ ...addForm, accountNumber: e.target.value.replace(/[^0-9]/g, '') })
-            }
-            maxLength={12}
+            label="Beneficiary Full Name"
+            placeholder="e.g. Sarah Jenkins"
+            value={addForm.name}
+            onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
             required
           />
 

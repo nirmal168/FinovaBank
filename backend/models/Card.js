@@ -58,7 +58,7 @@ const cardSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['Active', 'Blocked', 'Inactive'],
+        values: ['Active', 'Blocked', 'Inactive', 'Pending'],
         message: '{VALUE} is not a valid card status',
       },
       default: 'Active',
@@ -66,9 +66,9 @@ const cardSchema = new mongoose.Schema(
     },
     transactionLimit: {
       type: Number,
-      default: 2000.0,
-      min: [50, 'Minimum transaction limit is $50.00'],
-      max: [10000, 'Maximum transaction limit is $10,000.00'],
+      default: 25000.0,
+      min: [100, 'Minimum transaction limit is ₹100.00'],
+      max: [500000, 'Maximum transaction limit is ₹5,00,000.00'],
     },
   },
   {

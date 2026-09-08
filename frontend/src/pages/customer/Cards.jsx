@@ -141,7 +141,10 @@ const Cards = () => {
       setCards(fetchedCards);
 
       const fetchedAccounts = accountsRes?.accounts || [];
-      setUserAccounts(fetchedAccounts.filter((a) => a.status === 'Active'));
+      const activeAccounts = fetchedAccounts.filter(
+        (a) => !a.status || a.status.toLowerCase() === 'active'
+      );
+      setUserAccounts(activeAccounts.length > 0 ? activeAccounts : fetchedAccounts);
 
       if (fetchedCards.length > 0) {
         setSelectedCard(fetchedCards[0]);
@@ -177,10 +180,8 @@ const Cards = () => {
     e.preventDefault();
     setApplyError('');
 
-    if (!applyForm.accountId) {
-      setApplyError('Please select a bank account to link with this card.');
-      return;
-    }
+    const targetAccountId =
+      applyForm.accountId || (userAccounts.length > 0 ? userAccounts[0]._id : undefined);
 
     if (!/^[0-9]{4}$/.test(applyForm.pin)) {
       setApplyError('PIN must be exactly 4 numeric digits.');
@@ -195,20 +196,20 @@ const Cards = () => {
     try {
       setIsApplying(true);
       const res = await cardService.applyCard({
-        accountId: applyForm.accountId,
+        accountId: targetAccountId,
         cardType: applyForm.cardType,
         pin: applyForm.pin,
         transactionLimit: applyForm.transactionLimit,
       });
 
-      showToast(res.message || 'Virtual debit card issued successfully!');
+      showToast(res.message || 'Card application submitted! Awaiting bank admin approval.', 'success');
       setIsApplyModalOpen(false);
       await loadData();
       if (res.card) {
         setSelectedCard(res.card);
       }
     } catch (err) {
-      setApplyError(err.message || 'Failed to issue card. Please try again.');
+      setApplyError(err.message || 'Failed to submit card application. Please try again.');
     } finally {
       setIsApplying(false);
     }
@@ -427,10 +428,12 @@ const Cards = () => {
                         className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
                           card.status === 'Active'
                             ? 'bg-emerald-500/20 text-emerald-300'
+                            : card.status === 'Pending'
+                            ? 'bg-amber-500/20 text-amber-300'
                             : 'bg-rose-500/20 text-rose-300'
                         }`}
                       >
-                        {card.status}
+                        {card.status === 'Pending' ? 'Pending Approval' : card.status}
                       </span>
                     </button>
                   );
@@ -546,6 +549,21 @@ const Cards = () => {
                         </p>
                       </div>
                     )}
+
+                    {/* Pending Approval Overlay Banner */}
+                    {selectedCard?.status === 'Pending' && (
+                      <div className="absolute inset-0 -m-6 bg-slate-950/85 backdrop-blur-xs z-20 flex flex-col items-center justify-center text-center p-4">
+                        <div className="h-12 w-12 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mb-2">
+                          <ShieldCheck className="h-6 w-6" />
+                        </div>
+                        <p className="text-sm font-black uppercase tracking-wider text-white">
+                          Pending Admin Approval
+                        </p>
+                        <p className="text-[11px] text-slate-300 mt-1">
+                          Your card application is under review. You will be notified once it is issued by the bank.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* CARD BACK */
@@ -609,7 +627,21 @@ const Cards = () => {
             </div>
 
             {/* Quick Action Controls Panel */}
-            {selectedCard && (
+            {selectedCard && selectedCard.status === 'Pending' ? (
+              <Card className="border-amber-500/30 bg-amber-500/5">
+                <CardContent className="p-5 flex items-start gap-3.5">
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-[var(--finova-text-heading)]">Application Pending Admin Issuance</h4>
+                    <p className="text-xs text-[var(--finova-text-secondary)] mt-1 leading-relaxed">
+                      Your debit card application has been submitted to Finova Bank Administration. An administrator will review your application and issue the card. Once issued, security controls (freezing, PIN changes, and daily limits) will be enabled.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : selectedCard && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Card Management Controls</CardTitle>
@@ -883,23 +915,24 @@ const Cards = () => {
           )}
 
           {/* Account selector */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Link to Bank Account
-            </label>
-            <select
-              value={applyForm.accountId}
-              onChange={(e) => setApplyForm({ ...applyForm, accountId: e.target.value })}
-              className="w-full rounded-xl border border-[var(--finova-border)] bg-[var(--finova-bg-secondary)] px-3.5 py-2.5 text-xs font-semibold text-[var(--finova-text-heading)] transition-all focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-              required
-            >
-              {userAccounts.map((acc) => (
-                <option key={acc._id} value={acc._id}>
-                  {acc.accountType} Account • {acc.accountNumber} ({formatCurrency(acc.balance || 0)})
-                </option>
-              ))}
-            </select>
-          </div>
+          {userAccounts.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Link to Bank Account
+              </label>
+              <select
+                value={applyForm.accountId || userAccounts[0]._id}
+                onChange={(e) => setApplyForm({ ...applyForm, accountId: e.target.value })}
+                className="w-full rounded-xl border border-[var(--finova-border)] bg-[var(--finova-bg-secondary)] px-3.5 py-2.5 text-xs font-semibold text-[var(--finova-text-heading)] transition-all focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+              >
+                {userAccounts.map((acc) => (
+                  <option key={acc._id} value={acc._id}>
+                    {acc.accountType} Account • {acc.accountNumber} ({formatCurrency(acc.balance || 0)})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Card Network & Tier Selector */}
           <div>
@@ -1001,12 +1034,19 @@ const Cards = () => {
           </div>
 
           {/* Notice */}
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-[11px]">
-            <Info className="h-4 w-4 text-brand-600 shrink-0" />
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-[11px]">
+            <Info className="h-4 w-4 text-amber-600 shrink-0" />
             <span>
-              Virtual cards are issued instantly. Real card numbers and credentials are never stored.
+              Card applications are sent to bank administration for verification. An administrator will approve and issue your card.
             </span>
           </div>
+
+          {applyError && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{applyError}</span>
+            </div>
+          )}
 
           {/* Modal Buttons */}
           <div className="flex justify-end gap-3 pt-2">
@@ -1019,7 +1059,7 @@ const Cards = () => {
               Cancel
             </Button>
             <Button type="submit" variant="primary" isLoading={isApplying}>
-              Issue Virtual Card
+              Submit Card Application
             </Button>
           </div>
         </form>

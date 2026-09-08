@@ -73,6 +73,7 @@ class PredictionResponse(BaseModel):
     model_version: str
 
 @app.get("/")
+@app.get("/health")
 def health_check():
     return {
         "status": "online",

@@ -9,6 +9,7 @@ const otpService = require('../services/otpService');
 const fraudDetectionService = require('../services/fraudDetectionService');
 const { emitAdminFraudAlert } = require('../utils/socket');
 const { logAuditEvent } = require('../utils/auditLogger');
+const emailService = require('../services/emailService');
 
 // @desc    Deposit funds into account
 // @route   POST /api/transactions/deposit
@@ -26,19 +27,27 @@ const deposit = async (req, res, next) => {
       });
     }
 
-    // Get target account: either by passed accountNumber or primary account
+    // Get target account: either by passed accountNumber, accountId, or primary account
     let account;
-    if (req.body.accountNumber) {
-      account = await Account.findOne({
-        user: req.user._id,
-        accountNumber: req.body.accountNumber,
-      });
-      if (!account) {
+    const targetAccountParam = req.body.accountNumber || req.body.accountId;
+    if (targetAccountParam) {
+      const query = typeof targetAccountParam === 'string' && targetAccountParam.length === 24 && /^[0-9a-fA-F]{24}$/.test(targetAccountParam)
+        ? { _id: targetAccountParam }
+        : { accountNumber: targetAccountParam };
+      const rawAccount = await Account.findOne(query);
+      if (!rawAccount) {
         return res.status(404).json({
           success: false,
           message: 'Target bank account not found.',
         });
       }
+      if (rawAccount.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: You do not have permission to deposit into this account.',
+        });
+      }
+      account = rawAccount;
     } else {
       account = await Account.getOrCreateUserAccount(req.user._id);
     }
@@ -76,6 +85,17 @@ const deposit = async (req, res, next) => {
       title: 'Deposit Successful',
       message: `Deposit of ₹${numericAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} credited to account #${account.accountNumber}. New balance: ₹${account.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}.`,
       type: 'DEPOSIT',
+    });
+
+    // Send Deposit Transaction Email
+    emailService.sendTransactionEmail({
+      to: req.user.email,
+      name: req.user.name,
+      transaction,
+      account,
+      userPreferences: req.user.emailPreferences,
+    }).catch((err) => {
+      console.warn('[Transaction] Deposit email dispatch skipped/failed:', err.message);
     });
 
     // If high value (>= 5000), notify user of AML fraud review
@@ -140,19 +160,27 @@ const withdraw = async (req, res, next) => {
       });
     }
 
-    // Get target account: either by passed accountNumber or primary account
+    // Get target account: either by passed accountNumber, accountId, or primary account
     let account;
-    if (req.body.accountNumber) {
-      account = await Account.findOne({
-        user: req.user._id,
-        accountNumber: req.body.accountNumber,
-      });
-      if (!account) {
+    const targetAccountParam = req.body.accountNumber || req.body.accountId;
+    if (targetAccountParam) {
+      const query = typeof targetAccountParam === 'string' && targetAccountParam.length === 24 && /^[0-9a-fA-F]{24}$/.test(targetAccountParam)
+        ? { _id: targetAccountParam }
+        : { accountNumber: targetAccountParam };
+      const rawAccount = await Account.findOne(query);
+      if (!rawAccount) {
         return res.status(404).json({
           success: false,
           message: 'Target bank account not found.',
         });
       }
+      if (rawAccount.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: You do not have permission to withdraw from this account.',
+        });
+      }
+      account = rawAccount;
     } else {
       account = await Account.getOrCreateUserAccount(req.user._id);
     }
@@ -199,6 +227,17 @@ const withdraw = async (req, res, next) => {
       title: 'Cash Withdrawal Successful',
       message: `Withdrawal of ₹${numericAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} debited from account #${account.accountNumber}. New balance: ₹${account.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}.`,
       type: 'WITHDRAWAL',
+    });
+
+    // Send Withdrawal Transaction Email
+    emailService.sendTransactionEmail({
+      to: req.user.email,
+      name: req.user.name,
+      transaction,
+      account,
+      userPreferences: req.user.emailPreferences,
+    }).catch((err) => {
+      console.warn('[Transaction] Withdrawal email dispatch skipped/failed:', err.message);
     });
 
     // If high value (>= 5000), notify user
@@ -485,8 +524,9 @@ const transfer = async (req, res, next) => {
 
         // Halt and dispatch OTP to user email (handling cooldown if one was just dispatched)
         let cooldown = 60;
+        let otpResult = null;
         try {
-          const otpResult = await otpService.sendOtp({
+          otpResult = await otpService.sendOtp({
             user: req.user._id,
             email: req.user.email,
             purpose: 'TRANSFER',
@@ -509,8 +549,25 @@ const transfer = async (req, res, next) => {
 
         const alertMessage =
           riskLevel === 'HIGH'
-            ? `Security Alert: High-risk activity detected (${riskScore}/100 - ${riskReason}). A one-time verification code has been dispatched to ${req.user.email} to authorize this transfer.`
-            : `Security Verification Required: A one-time verification code has been dispatched to ${req.user.email} to authorize this transfer of $${numericAmount.toFixed(2)}.`;
+            ? `Security Alert: High-risk activity detected (${riskScore}/100 - ${riskReason}). A one-time verification code has been dispatched to your registered email to authorize this transfer.`
+            : `Security Verification Required: A one-time verification code has been dispatched to your registered email to authorize this transfer of ₹${numericAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}.`;
+
+        // If High Risk, dispatch security alert email to user
+        if (riskLevel === 'HIGH') {
+          emailService.sendFraudAlertEmail({
+            to: req.user.email,
+            name: req.user.name,
+            alertData: {
+              amount: numericAmount,
+              riskLevel,
+              riskScore,
+              reason: riskReason,
+              actionRequired: 'Verify via the 6-digit OTP dispatched to your registered email or freeze your account if this was unauthorized.',
+            },
+          }).catch((err) => {
+            console.warn('[Transaction] Fraud alert email dispatch skipped/failed:', err.message);
+          });
+        }
 
         return res.status(200).json({
           success: true,
@@ -705,6 +762,18 @@ const transfer = async (req, res, next) => {
           ? `Your transfer of ₹${numericAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} to #${receiverAccount.accountNumber} has been placed on temporary hold for compliance review.`
           : `Sent ₹${numericAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} to account #${receiverAccount.accountNumber}. New balance: ₹${senderAccount.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}.`,
         type: isCriticalRisk ? 'FRAUD' : 'TRANSFER',
+      });
+
+      // Send Transfer Transaction Email to Sender
+      emailService.sendTransactionEmail({
+        to: req.user.email,
+        name: req.user.name,
+        transaction: senderTxn,
+        account: senderAccount,
+        recipient: `#${receiverAccount.accountNumber}`,
+        userPreferences: req.user.emailPreferences,
+      }).catch((err) => {
+        console.warn('[Transaction] Sender transfer email dispatch skipped/failed:', err.message);
       });
 
       // Auto-trigger TRANSFER notification for Receiver (if on platform and NOT held)
@@ -931,6 +1000,132 @@ const getTransactionById = async (req, res, next) => {
   }
 };
 
+// @desc    Generate comprehensive bank statement for an account
+// @route   GET /api/transactions/statement
+// @access  Private (Bearer token)
+const getStatement = async (req, res, next) => {
+  try {
+    const { accountNumber, startDate, endDate, type } = req.query;
+
+    // Find account
+    let account;
+    if (accountNumber) {
+      account = await Account.findOne({ accountNumber: accountNumber.trim() });
+    } else {
+      account = await Account.getOrCreateUserAccount(req.user._id);
+    }
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found.',
+      });
+    }
+
+    // Security check: Must belong to user or admin
+    if (account.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: You do not have access to this account statement.',
+      });
+    }
+
+    // Date range default: last 30 days
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const query = {
+      $or: [
+        { senderAccount: account.accountNumber },
+        { receiverAccount: account.accountNumber },
+      ],
+      createdAt: { $gte: start, $lte: end },
+    };
+
+    if (type && type.toUpperCase() !== 'ALL') {
+      query.type = type.toUpperCase();
+    }
+
+    // Fetch transactions sorted chronologically
+    const rawTransactions = await Transaction.find(query).sort({ createdAt: 1 }).lean();
+
+    let totalCredits = 0;
+    let totalDebits = 0;
+    let creditCount = 0;
+    let debitCount = 0;
+
+    const formattedTransactions = rawTransactions.map((tx) => {
+      const isCredit =
+        tx.type === 'DEPOSIT' ||
+        tx.receiverAccount === account.accountNumber ||
+        (tx.type === 'REFUND' && tx.receiverAccount === account.accountNumber);
+
+      const isDebit =
+        tx.type === 'WITHDRAW' ||
+        tx.type === 'PAYMENT' ||
+        (tx.type === 'TRANSFER' && tx.senderAccount === account.accountNumber);
+
+      if (isCredit) {
+        totalCredits += tx.amount;
+        creditCount++;
+      } else {
+        totalDebits += tx.amount;
+        debitCount++;
+      }
+
+      return {
+        ...tx,
+        isCredit,
+        isDebit,
+        creditAmount: isCredit ? tx.amount : 0,
+        debitAmount: isDebit ? tx.amount : 0,
+      };
+    });
+
+    const user = await User.findById(account.user).select('name email phone customerId address');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        account: {
+          accountNumber: account.accountNumber,
+          accountType: account.accountType || 'Savings',
+          currency: account.currency || 'INR',
+          currentBalance: account.balance,
+          status: account.status,
+          ifscCode: account.ifscCode || 'FINV0001088',
+          branch: account.branch || 'Connaught Place, New Delhi',
+        },
+        user: {
+          name: user?.name || req.user.name,
+          email: user?.email || req.user.email,
+          phone: user?.phone || req.user.phone,
+          customerId: user?.customerId || req.user.customerId,
+          address: user?.address || null,
+        },
+        period: {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        },
+        summary: {
+          totalCredits,
+          totalDebits,
+          creditCount,
+          debitCount,
+          netFlow: totalCredits - totalDebits,
+          closingBalance: account.balance,
+          transactionCount: formattedTransactions.length,
+        },
+        transactions: formattedTransactions,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   deposit,
   withdraw,
@@ -939,5 +1134,7 @@ module.exports = {
   transfer,
   getTransactions,
   getTransactionById,
+  getStatement,
 };
+
 

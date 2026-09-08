@@ -8,8 +8,9 @@ const {
   transfer,
   getTransactions,
   getTransactionById,
+  getStatement,
 } = require('../controllers/transactionController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 const { transferLimiter } = require('../middleware/rateLimitMiddleware');
 
 const router = express.Router();
@@ -36,6 +37,9 @@ router.use(protect);
 // @route   GET /api/transactions - Paginated, filtered, searchable transaction list
 router.get('/', getTransactions);
 
+// @route   GET /api/transactions/statement - Formal bank statement with summary & running balance
+router.get('/statement', getStatement);
+
 // @route   GET /api/transactions/account
 router.get('/account', getAccount);
 
@@ -45,9 +49,11 @@ router.get('/history', getHistory);
 // @route   GET /api/transactions/:id - Single transaction details by ID or transactionId
 router.get('/:id', getTransactionById);
 
-// @route   POST /api/transactions/deposit
+// @route   POST /api/transactions/deposit — ADMIN ONLY
+// @desc    Admin-initiated bank deposit into a customer account
 router.post(
   '/deposit',
+  authorize('admin'),
   [
     body('amount')
       .notEmpty()
@@ -64,9 +70,11 @@ router.post(
   deposit
 );
 
-// @route   POST /api/transactions/withdraw
+// @route   POST /api/transactions/withdraw — ADMIN ONLY
+// @desc    Admin-initiated bank withdrawal from a customer account
 router.post(
   '/withdraw',
+  authorize('admin'),
   [
     body('amount')
       .notEmpty()

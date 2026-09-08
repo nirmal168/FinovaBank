@@ -30,46 +30,13 @@ const handleValidation = (req, res, next) => {
   next();
 };
 
-// @route   POST /api/auth/register
-router.post(
-  '/register',
-  [
-    body('name')
-      .trim()
-      .notEmpty()
-      .withMessage('Name is required')
-      .isLength({ max: 50 })
-      .withMessage('Name cannot exceed 50 characters'),
-    body('email')
-      .trim()
-      .isEmail()
-      .withMessage('Please provide a valid email address')
-      .normalizeEmail(),
-    body('phone')
-      .trim()
-      .notEmpty()
-      .withMessage('Phone number is required'),
-    body('password')
-      .isLength({ min: 6 })
-      .withMessage('Password must be at least 6 characters long'),
-    body('role')
-      .optional()
-      .isIn(['customer', 'admin'])
-      .withMessage('Role must be either customer or admin'),
-  ],
-  handleValidation,
-  register
-);
+// @route   POST /api/auth/register (Public registration disabled - returns 403)
+router.post('/register', register);
 
 // @route   POST /api/auth/login
 router.post(
   '/login',
   [
-    body('email')
-      .trim()
-      .isEmail()
-      .withMessage('Please provide a valid email address')
-      .normalizeEmail(),
     body('password')
       .notEmpty()
       .withMessage('Password is required'),

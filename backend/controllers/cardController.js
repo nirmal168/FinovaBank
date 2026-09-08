@@ -5,7 +5,7 @@ const { createNotification } = require('../utils/notificationService');
 const { logAuditEvent } = require('../utils/auditLogger');
 
 /**
- * @desc    Apply for a simulated virtual debit card
+ * @desc    Apply for a virtual debit card (customer submits application — admin must approve)
  * @route   POST /api/cards/apply
  * @access  Private (JWT customer)
  */
@@ -15,11 +15,24 @@ exports.applyCard = async (req, res, next) => {
     const targetAccountId = accountId || req.body.account;
 
     // Validate Account exists and belongs to current user
-    const account = await Account.findById(targetAccountId);
+    let account;
+    if (targetAccountId) {
+      const isMongoId = typeof targetAccountId === 'string' && /^[0-9a-fA-F]{24}$/.test(targetAccountId);
+      if (isMongoId) {
+        account = await Account.findById(targetAccountId);
+      }
+      if (!account) {
+        account = await Account.findOne({ accountNumber: targetAccountId });
+      }
+    }
+    if (!account) {
+      account = await Account.getOrCreateUserAccount(req.user._id);
+    }
+
     if (!account) {
       return res.status(404).json({
         success: false,
-        message: 'Selected bank account was not found.',
+        message: 'No bank account found for this user.',
       });
     }
 
@@ -30,14 +43,27 @@ exports.applyCard = async (req, res, next) => {
       });
     }
 
-    if (account.status !== 'Active') {
+    if (account.status && account.status.toLowerCase() !== 'active') {
       return res.status(400).json({
         success: false,
-        message: `Cannot issue card for account with status "${account.status}". Account must be Active.`,
+        message: `Cannot apply for a card on account with status "${account.status}". Account must be Active.`,
       });
     }
 
-    // Generate simulated 4-digit last four
+    // Check for an existing pending application to prevent duplicates
+    const existingPending = await Card.findOne({
+      user: req.user._id,
+      account: account._id,
+      status: 'Pending',
+    });
+    if (existingPending) {
+      return res.status(400).json({
+        success: false,
+        message: 'You already have a pending card application for this account. Please wait for admin approval.',
+      });
+    }
+
+    // Generate simulated 4-digit last four (will be finalised by admin on issuance)
     const randomLastFour = Math.floor(1000 + Math.random() * 9000).toString();
 
     // Determine prefix based on card network
@@ -54,7 +80,7 @@ exports.applyCard = async (req, res, next) => {
     // Hash 4-digit PIN
     const hashedPin = await Card.hashPin(pin);
 
-    // Create Virtual Debit Card
+    // Create card application — status is Pending until admin approves and issues it
     const card = await Card.create({
       user: req.user._id,
       account: account._id,
@@ -64,14 +90,14 @@ exports.applyCard = async (req, res, next) => {
       cardholderName: req.user.name,
       expiryDate,
       pin: hashedPin,
-      status: 'Active',
-      transactionLimit: transactionLimit ? Number(transactionLimit) : 2000,
+      status: 'Pending',   // ← Admin must activate this card
+      transactionLimit: transactionLimit ? Number(transactionLimit) : 25000,
     });
 
     // Populate linked account info (omits sensitive pin automatically)
     await card.populate('account', 'accountNumber accountType balance currency status');
 
-    // Audit log CARD_APPLY event
+    // Audit log CARD_APPLICATION event
     await logAuditEvent({
       user: req.user._id,
       action: 'CARD_APPLY',
@@ -82,12 +108,13 @@ exports.applyCard = async (req, res, next) => {
         cardType: card.cardType,
         lastFour: card.lastFour,
         transactionLimit: card.transactionLimit,
+        status: 'Pending — awaiting admin issuance',
       },
     });
 
     res.status(201).json({
       success: true,
-      message: 'Virtual debit card issued successfully!',
+      message: 'Card application submitted successfully! Your card will be activated once approved by the bank administration.',
       card: {
         _id: card._id,
         maskedCardNumber: card.maskedCardNumber,

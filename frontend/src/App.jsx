@@ -9,8 +9,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import Dashboard from './pages/customer/Dashboard';
 import Profile from './pages/customer/Profile';
-import Deposit from './pages/customer/Deposit';
-import Withdraw from './pages/customer/Withdraw';
 import Accounts from './pages/customer/Accounts';
 import AccountDetails from './pages/customer/AccountDetails';
 import Transfer from './pages/customer/Transfer';
@@ -18,21 +16,29 @@ import Transactions from './pages/customer/Transactions';
 import TransactionDetails from './pages/customer/TransactionDetails';
 import Beneficiaries from './pages/customer/Beneficiaries';
 import Cards from './pages/customer/Cards';
+import ServiceRequests from './pages/customer/ServiceRequests';
 import Loans from './pages/customer/Loans';
 import LoanApply from './pages/customer/LoanApply';
 import LoanDetails from './pages/customer/LoanDetails';
 import Notifications from './pages/customer/Notifications';
+import Settings from './pages/customer/Settings';
+import BankStatement from './pages/customer/BankStatement';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminCustomers from './pages/admin/Customers';
 import AdminAccounts from './pages/admin/Accounts';
+import AdminCards from './pages/admin/Cards';
+import AdminServiceRequests from './pages/admin/ServiceRequests';
 import AdminTransactions from './pages/admin/Transactions';
 import AdminLoans from './pages/admin/Loans';
 import AdminFraudAlerts from './pages/admin/FraudAlerts';
 import AdminAuditLogs from './pages/admin/AuditLogs';
+import AdminSettings from './pages/admin/AdminSettings';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
+import ChangePassword from './pages/auth/ChangePassword';
+import Unauthorized from './pages/Unauthorized';
 import LandingPage from './pages/LandingPage';
 import About from './pages/public/About';
 import Contact from './pages/public/Contact';
@@ -86,6 +92,15 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/unauthorized" element={<Unauthorized />} />
+              <Route
+                path="/change-password"
+                element={
+                  <ProtectedRoute>
+                    <ChangePassword />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Protected Customer & Core Banking Routes */}
               <Route
@@ -97,8 +112,9 @@ function App() {
               >
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/profile" element={<Profile />} />
-                <Route path="/deposit" element={<Deposit />} />
-                <Route path="/withdraw" element={<Withdraw />} />
+                {/* Deposit & Withdraw are admin-only — redirect customers to unauthorized */}
+                <Route path="/deposit" element={<Navigate to="/unauthorized" replace />} />
+                <Route path="/withdraw" element={<Navigate to="/unauthorized" replace />} />
                 <Route path="/accounts" element={<Accounts />} />
                 <Route path="/accounts/:id" element={<AccountDetails />} />
                 <Route path="/transfer" element={<Transfer />} />
@@ -107,11 +123,13 @@ function App() {
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/transactions/:id" element={<TransactionDetails />} />
                 <Route path="/cards" element={<Cards />} />
+                <Route path="/service-requests" element={<ServiceRequests />} />
                 <Route path="/loans" element={<Loans />} />
                 <Route path="/loans/apply" element={<LoanApply />} />
                 <Route path="/loans/:id" element={<LoanDetails />} />
                 <Route path="/notifications" element={<Notifications />} />
-                <Route path="/settings" element={<PagePlaceholder title="System Settings" phase="Phase 6" />} />
+                <Route path="/statements" element={<BankStatement />} />
+                <Route path="/settings" element={<Settings />} />
 
             {/* Administrator Only Control Center Routes */}
             <Route
@@ -147,6 +165,22 @@ function App() {
               }
             />
             <Route
+              path="admin/cards"
+              element={
+                <AdminRoute>
+                  <AdminCards />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/service-requests"
+              element={
+                <AdminRoute>
+                  <AdminServiceRequests />
+                </AdminRoute>
+              }
+            />
+            <Route
               path="admin/transactions"
               element={
                 <AdminRoute>
@@ -175,6 +209,14 @@ function App() {
               element={
                 <AdminRoute>
                   <AdminAuditLogs />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/settings"
+              element={
+                <AdminRoute>
+                  <AdminSettings />
                 </AdminRoute>
               }
             />

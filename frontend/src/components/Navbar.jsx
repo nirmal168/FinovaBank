@@ -1,45 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Menu, User, RefreshCw, LogOut, Shield } from 'lucide-react';
+import { Menu, User, LogOut, Shield, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
-import NotificationDropdown from './NotificationDropdown';
-import ThemeToggle from './ThemeToggle';
-import finovaLogo from '../assets/finova-logo.png';
+import finovaShield from '../assets/finova-shield.png';
 
 const Navbar = ({ onMenuToggle }) => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-
-  const [serverHealth, setServerHealth] = useState({
-    status: 'checking',
-    loading: true,
-  });
-
-  const checkHealth = async () => {
-    try {
-      setServerHealth((prev) => ({ ...prev, loading: true }));
-      const res = await api.get('/health');
-      if (res.data?.status === 'ok') {
-        setServerHealth({
-          status: 'online',
-          db: res.data.database?.status || 'unknown',
-          loading: false,
-        });
-      } else {
-        setServerHealth({ status: 'offline', loading: false });
-      }
-    } catch {
-      setServerHealth({ status: 'offline', loading: false });
-    }
-  };
-
-  useEffect(() => {
-    checkHealth();
-    const interval = setInterval(checkHealth, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleLogout = async () => {
     setShowProfileMenu(false);
@@ -48,8 +16,8 @@ const Navbar = ({ onMenuToggle }) => {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[var(--finova-border)] bg-[var(--finova-card-bg)] px-4 sm:px-6 shadow-xs">
-      {/* Left: Mobile Toggle & Brand */}
+    <header className="sticky top-0 z-30 flex h-20 w-full items-center justify-between border-b border-[var(--finova-border)] bg-[var(--finova-card-bg)] px-4 sm:px-6 lg:px-8 shadow-xs">
+      {/* Left: Mobile Toggle & Big Finova Brand Logo */}
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -57,101 +25,60 @@ const Navbar = ({ onMenuToggle }) => {
           className="lg:hidden rounded-xl p-2 text-[var(--finova-text-secondary)] hover:bg-[var(--finova-bg-secondary)] hover:text-[var(--finova-text-heading)] transition-colors"
           aria-label="Toggle Navigation"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-6 w-6" />
         </button>
 
-        <Link to="/" className="flex items-center gap-2.5 group">
+        <Link to="/" className="flex items-center gap-3.5 group focus:outline-none">
           <img
-            src={finovaLogo}
+            src={finovaShield}
             alt="Finova"
-            className="h-9 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+            className="h-11 sm:h-13 w-auto object-contain transition-transform duration-200 group-hover:scale-105 drop-shadow-xs"
           />
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-lg tracking-tight text-[var(--finova-text-heading)]">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-2xl sm:text-3xl tracking-tight text-[var(--finova-text-heading)] leading-none">
                 FINOVA
               </span>
               <span className="rounded-full bg-[var(--finova-mint)] px-2 py-0.5 text-[10px] font-bold text-[var(--finova-success)] border border-[var(--finova-sage)]/25">
                 v1.0
               </span>
             </div>
-            <p className="hidden text-[10px] font-medium text-[var(--finova-text-secondary)] sm:block">
+            <p className="text-[11px] sm:text-xs font-semibold text-[var(--finova-text-secondary)] tracking-tight mt-0.5">
               Smart Banking. Smarter Future.
             </p>
           </div>
         </Link>
       </div>
 
-      {/* Middle: Search input */}
-      <div className="hidden md:flex items-center max-w-md w-full mx-6">
-        <div className="relative w-full">
-          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-[var(--finova-text-secondary)]" />
-          <input
-            type="text"
-            placeholder="Search accounts, transactions, transfers..."
-            className="w-full pl-10 pr-4 py-2 text-xs rounded-xl border border-[var(--finova-border)] bg-[var(--finova-bg-secondary)] text-[var(--finova-text-main)] focus:bg-[var(--finova-card-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--finova-blue)]/20 focus:border-[var(--finova-primary)] transition-all placeholder:text-[var(--finova-text-muted)]"
-          />
-        </div>
-      </div>
-
-      {/* Right: Server Status, Theme Toggle & Profile */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Live Backend Indicator */}
-        <div
-          onClick={checkHealth}
-          title={`Backend: ${serverHealth.status} (Click to refresh)`}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs cursor-pointer border border-[var(--finova-border)] bg-[var(--finova-card-bg)] hover:bg-[var(--finova-bg-secondary)] transition-colors"
-        >
-          <span
-            className={`h-2 w-2 rounded-full ${
-              serverHealth.status === 'online'
-                ? 'bg-[var(--finova-success)]'
-                : serverHealth.status === 'checking'
-                ? 'bg-[var(--finova-warning)] animate-ping'
-                : 'bg-[var(--finova-danger)]'
-            }`}
-          />
-          <span className="hidden sm:inline font-semibold text-[11px] text-[var(--finova-text-main)]">
-            {serverHealth.status === 'online'
-              ? 'API Online'
-              : serverHealth.status === 'checking'
-              ? 'Connecting...'
-              : 'API Offline'}
-          </span>
-          <RefreshCw
-            className={`h-3 w-3 text-[var(--finova-text-secondary)] ${serverHealth.loading ? 'animate-spin' : ''}`}
-          />
-        </div>
-
-        {/* Theme Toggle Button */}
-        <ThemeToggle />
-
-        {/* Real-time Notifications Bell & Dropdown */}
-        {isAuthenticated && <NotificationDropdown />}
-
-        {/* User Account / Profile Menu */}
+      {/* Right: Only Account Detail / Profile Menu */}
+      <div className="flex items-center">
         {isAuthenticated ? (
-          <div className="relative pl-2 border-l border-[var(--finova-border)]">
+          <div className="relative">
             <button
               type="button"
               onClick={() => setShowProfileMenu((prev) => !prev)}
-              className="flex items-center gap-2 rounded-xl p-1 hover:bg-[var(--finova-bg-secondary)] transition-colors"
+              className="flex items-center gap-3 rounded-2xl p-1.5 sm:px-3 sm:py-2 hover:bg-[var(--finova-bg-secondary)] transition-all border border-transparent hover:border-[var(--finova-border)]"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--finova-deep)] text-[var(--finova-card-bg)] font-bold text-xs shadow-xs overflow-hidden border border-[var(--finova-border)]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--finova-navy)] to-[var(--finova-primary)] text-white font-black text-sm shadow-xs overflow-hidden border border-[var(--finova-border)]">
                 {user?.profileImage ? (
                   <img src={user.profileImage} alt={user.name} className="h-full w-full object-cover" />
                 ) : (
                   <span>{user?.name?.charAt(0).toUpperCase() || 'U'}</span>
                 )}
               </div>
-              <div className="hidden lg:block text-left">
-                <p className="text-xs font-semibold text-[var(--finova-text-heading)] leading-tight">
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-bold text-[var(--finova-text-heading)] leading-tight">
                   {user?.name}
                 </p>
-                <p className="text-[10px] text-[var(--finova-text-secondary)] capitalize">
+                <p className="text-xs font-medium text-[var(--finova-text-secondary)] capitalize">
                   {user?.role === 'admin' ? 'Administrator' : 'Customer'}
                 </p>
               </div>
+              <ChevronDown
+                className={`hidden sm:block h-4 w-4 text-[var(--finova-text-secondary)] transition-transform duration-200 ${
+                  showProfileMenu ? 'rotate-180' : ''
+                }`}
+              />
             </button>
 
             {/* Dropdown Menu */}
@@ -165,6 +92,11 @@ const Navbar = ({ onMenuToggle }) => {
                   <div className="px-3 py-2.5 border-b border-[var(--finova-border)]">
                     <p className="text-xs font-bold text-[var(--finova-text-heading)]">{user?.name}</p>
                     <p className="text-[11px] text-[var(--finova-text-secondary)] truncate">{user?.email}</p>
+                    {user?.customerId && (
+                      <p className="text-[10px] font-mono text-brand-600 dark:text-brand-400 mt-0.5">
+                        ID: {user.customerId}
+                      </p>
+                    )}
                     <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-[var(--finova-bg-secondary)] px-2 py-0.5 text-[10px] font-semibold text-[var(--finova-text-heading)] uppercase border border-[var(--finova-border)]">
                       <Shield className="h-3 w-3 text-[var(--finova-sage)]" />
                       <span>{user?.role}</span>
@@ -179,6 +111,15 @@ const Navbar = ({ onMenuToggle }) => {
                     >
                       <User className="h-4 w-4 text-[var(--finova-text-secondary)]" />
                       <span>My Profile & Settings</span>
+                    </Link>
+
+                    <Link
+                      to="/change-password"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--finova-text-main)] hover:bg-[var(--finova-bg-secondary)] hover:text-[var(--finova-text-heading)] transition-colors"
+                    >
+                      <Shield className="h-4 w-4 text-[var(--finova-text-secondary)]" />
+                      <span>Change Password</span>
                     </Link>
 
                     {user?.role === 'admin' && (
@@ -217,7 +158,7 @@ const Navbar = ({ onMenuToggle }) => {
             </Link>
             <Link
               to="/register"
-              className="rounded-xl bg-[var(--finova-deep)] px-3.5 py-1.5 text-xs font-semibold text-[var(--finova-card-bg)] shadow-xs hover:opacity-90"
+              className="rounded-xl bg-[var(--finova-deep)] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90"
             >
               Register
             </Link>

@@ -100,6 +100,7 @@ export const AuthProvider = ({ children }) => {
   const changePassword = async (passwords) => {
     try {
       const data = await authService.changePassword(passwords);
+      setUser((prev) => (prev ? { ...prev, mustChangePassword: false } : prev));
       return { success: true, message: data.message };
     } catch (err) {
       return { success: false, error: err.message || 'Password change failed' };

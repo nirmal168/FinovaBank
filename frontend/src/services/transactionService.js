@@ -27,20 +27,11 @@ export const transactionService = {
     return response.data;
   },
 
-  // Transfer funds between accounts
-  transfer: async ({
-    senderAccountNumber,
-    receiverAccountNumber,
-    amount,
-    description,
-    reference,
-  }) => {
+  // Transfer funds between accounts (supports optional OTP and hold flags)
+  transfer: async (transferData) => {
     const response = await api.post('/transactions/transfer', {
-      senderAccountNumber,
-      receiverAccountNumber,
-      amount: parseFloat(amount),
-      description,
-      reference,
+      ...transferData,
+      amount: parseFloat(transferData.amount),
     });
     return response.data;
   },
@@ -60,6 +51,12 @@ export const transactionService = {
   // Get single transaction details by ID or transactionId
   getTransactionById: async (id) => {
     const response = await api.get(`/transactions/${id}`);
+    return response.data;
+  },
+
+  // Get bank statement with official summary & balances
+  getStatement: async (params = {}) => {
+    const response = await api.get('/transactions/statement', { params });
     return response.data;
   },
 

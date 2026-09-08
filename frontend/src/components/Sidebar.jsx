@@ -4,8 +4,6 @@ import {
   LayoutDashboard,
   Wallet,
   ArrowLeftRight,
-  ArrowDownLeft,
-  ArrowUpRight,
   Receipt,
   CreditCard,
   Landmark,
@@ -17,19 +15,20 @@ import {
   Users,
   Bell,
   FileText,
+  BookOpen,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import finovaLogo from '../assets/finova-logo.png';
+import finovaShield from '../assets/finova-shield.png';
 
 const customerNavItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Deposit Funds', path: '/deposit', icon: ArrowDownLeft },
-  { name: 'Withdraw Funds', path: '/withdraw', icon: ArrowUpRight },
   { name: 'Accounts', path: '/accounts', icon: Wallet },
   { name: 'Transfer Funds', path: '/transfer', icon: ArrowLeftRight },
   { name: 'Beneficiaries', path: '/beneficiaries', icon: Users },
   { name: 'Transactions', path: '/transactions', icon: Receipt },
+  { name: 'Bank Statement', path: '/statements', icon: FileText },
   { name: 'Cards', path: '/cards', icon: CreditCard },
+  { name: 'Cheque & Passbook', path: '/service-requests', icon: BookOpen },
   { name: 'Loans & Credit', path: '/loans', icon: Landmark },
   { name: 'Notifications', path: '/notifications', icon: Bell },
   { name: 'Profile & Security', path: '/profile', icon: User },
@@ -57,22 +56,22 @@ const Sidebar = ({ isOpen, onClose }) => {
         }`}
       >
         <div className="flex flex-col flex-1 overflow-y-auto">
-          {/* Header */}
-          <div className="flex h-16 items-center justify-between px-4 border-b border-[var(--finova-border)]">
-            <div className="flex items-center gap-2.5">
-              <img src={finovaLogo} alt="Finova" className="h-8 w-auto object-contain" />
+          {/* Header (Visible only on mobile drawer, since Navbar handles desktop header branding) */}
+          <div className="flex h-20 items-center justify-between px-4 border-b border-[var(--finova-border)] lg:hidden">
+            <div className="flex items-center gap-3">
+              <img src={finovaShield} alt="Finova" className="h-10 w-auto object-contain" />
               <div>
-                <span className="font-extrabold text-sm tracking-tight text-[var(--finova-text-heading)] block leading-tight">FINOVA</span>
-                <span className="text-[9px] font-medium text-[var(--finova-text-secondary)] block leading-tight">Smart Banking. Smarter Future.</span>
+                <span className="font-black text-xl tracking-tight text-[var(--finova-text-heading)] block leading-tight">FINOVA</span>
+                <span className="text-[10px] font-semibold text-[var(--finova-text-secondary)] block leading-tight">Smart Banking. Smarter Future.</span>
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="p-1 rounded-lg text-[var(--finova-text-secondary)] hover:text-[var(--finova-text-heading)] hover:bg-[var(--finova-bg-secondary)] lg:hidden transition-colors"
+              className="p-2 rounded-xl text-[var(--finova-text-secondary)] hover:text-[var(--finova-text-heading)] hover:bg-[var(--finova-bg-secondary)] transition-colors"
               aria-label="Close Navigation"
             >
-              <X className="h-5 w-5" />
+              <X className="h-6 w-6" />
             </button>
           </div>
 
@@ -80,7 +79,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           {user && (
             <div className="mx-3 mt-4 mb-2 p-3 rounded-xl bg-[var(--finova-bg-secondary)] border border-[var(--finova-border)]">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--finova-deep)] text-[var(--finova-card-bg)] font-bold text-xs shrink-0 overflow-hidden shadow-xs border border-[var(--finova-border)]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--finova-navy)] to-[var(--finova-primary)] text-white font-black text-xs shrink-0 overflow-hidden shadow-xs border border-[var(--finova-border)]">
                   {user.profileImage ? (
                     <img src={user.profileImage} alt={user.name} className="h-full w-full object-cover" />
                   ) : (
@@ -93,82 +92,96 @@ const Sidebar = ({ isOpen, onClose }) => {
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between pt-2 border-t border-[var(--finova-border)] text-[10px]">
-                <span className="text-[var(--finova-text-secondary)]">Security Tier:</span>
-                <span className="font-bold uppercase text-[var(--finova-text-heading)] bg-[var(--finova-mint)] px-2 py-0.5 rounded border border-[var(--finova-sage)]/30">
+                <span className="text-[var(--finova-text-secondary)] font-medium">Security Tier:</span>
+                <span className={`font-bold uppercase px-2 py-0.5 rounded border ${
+                  isAdmin
+                    ? 'bg-[var(--finova-warning-bg)] text-[var(--finova-warning)] border-[var(--finova-warning)]/30'
+                    : 'bg-[var(--finova-mint)] text-[var(--finova-text-heading)] border-[var(--finova-sage)]/30'
+                }`}>
                   {user.role}
                 </span>
               </div>
+              {user.customerId && (
+                <div className="mt-1 flex items-center justify-between text-[10px]">
+                  <span className="text-[var(--finova-text-secondary)]">Customer ID:</span>
+                  <span className="font-mono font-bold text-[var(--finova-text-heading)]">
+                    {user.customerId}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Navigation Items */}
+          {/* Navigation Items - Strict Portal Separation */}
           <div className="px-3 py-2 space-y-1">
-            <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--finova-text-muted)] mb-2">
-              Banking Menu
-            </p>
-            {customerNavItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => onClose && onClose()}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 ${
-                      isActive
-                        ? 'bg-[var(--finova-mint)] text-[var(--finova-text-heading)] shadow-xs border border-[var(--finova-sage)]/35 font-bold'
-                        : 'text-[var(--finova-text-secondary)] hover:bg-[var(--finova-bg-secondary)] hover:text-[var(--finova-text-heading)]'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-[var(--finova-sage)]' : 'text-[var(--finova-text-secondary)]'}`} />
-                      <span>{item.name}</span>
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
-
-            {/* Admin Section (Conditional) */}
-            {isAdmin && (
-              <div className="pt-4 mt-3 border-t border-[var(--finova-border)]">
+            {isAdmin ? (
+              <>
                 <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--finova-blue)] mb-2">
-                  Admin Controls
+                  Admin Console
                 </p>
-                <div className="space-y-1">
-                  {[
-                    { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
-                    { name: 'Customers', path: '/admin/customers', icon: Users },
-                    { name: 'Accounts', path: '/admin/accounts', icon: Wallet },
-                    { name: 'Transactions', path: '/admin/transactions', icon: Receipt },
-                    { name: 'Loan Approvals', path: '/admin/loans', icon: Landmark },
-                    { name: 'Fraud Alerts', path: '/admin/fraud-alerts', icon: ShieldAlert },
-                    { name: 'Audit Logs', path: '/admin/audit-logs', icon: FileText },
-                  ].map((adminItem) => {
-                    const AdminIcon = adminItem.icon;
-                    return (
-                      <NavLink
-                        key={adminItem.path}
-                        to={adminItem.path}
-                        end={adminItem.path === '/admin'}
-                        onClick={() => onClose && onClose()}
-                        className={({ isActive }) =>
-                          `flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150 ${
-                            isActive
-                              ? 'bg-[var(--finova-primary)] text-[var(--finova-card-bg)] shadow-xs border border-[var(--finova-primary)]'
-                              : 'text-[var(--finova-text-secondary)] hover:bg-[var(--finova-bg-secondary)] hover:text-[var(--finova-text-heading)]'
-                          }`
-                        }
-                      >
-                        <AdminIcon className="h-4 w-4 shrink-0" />
-                        <span>{adminItem.name}</span>
-                      </NavLink>
-                    );
-                  })}
-                </div>
-              </div>
+                {[
+                  { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+                  { name: 'Customer Management', path: '/admin/customers', icon: Users },
+                  { name: 'Bank Accounts', path: '/admin/accounts', icon: Wallet },
+                  { name: 'Cards & Merchant Issuance', path: '/admin/cards', icon: CreditCard },
+                  { name: 'Cheque & Passbook Issuance', path: '/admin/service-requests', icon: BookOpen },
+                  { name: 'Transactions Audit', path: '/admin/transactions', icon: Receipt },
+                  { name: 'Loan Decisions', path: '/admin/loans', icon: Landmark },
+                  { name: 'Fraud Intelligence', path: '/admin/fraud-alerts', icon: ShieldAlert },
+                  { name: 'System Audit Logs', path: '/admin/audit-logs', icon: FileText },
+                  { name: 'Settings', path: '/admin/settings', icon: Settings },
+                ].map((adminItem) => {
+                  const AdminIcon = adminItem.icon;
+                  return (
+                    <NavLink
+                      key={adminItem.path}
+                      to={adminItem.path}
+                      end={adminItem.path === '/admin'}
+                      onClick={() => onClose && onClose()}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 ${
+                          isActive
+                            ? 'bg-[var(--finova-primary)] text-white shadow-xs border border-[var(--finova-primary)] font-bold'
+                            : 'text-[var(--finova-text-secondary)] hover:bg-[var(--finova-bg-secondary)] hover:text-[var(--finova-text-heading)]'
+                        }`
+                      }
+                    >
+                      <AdminIcon className="h-4 w-4 shrink-0" />
+                      <span>{adminItem.name}</span>
+                    </NavLink>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--finova-text-muted)] mb-2">
+                  Customer Banking
+                </p>
+                {customerNavItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => onClose && onClose()}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 ${
+                          isActive
+                            ? 'bg-[var(--finova-mint)] text-[var(--finova-text-heading)] shadow-xs border border-[var(--finova-sage)]/35 font-bold'
+                            : 'text-[var(--finova-text-secondary)] hover:bg-[var(--finova-bg-secondary)] hover:text-[var(--finova-text-heading)]'
+                        }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-[var(--finova-sage)]' : 'text-[var(--finova-text-secondary)]'}`} />
+                          <span>{item.name}</span>
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </>
             )}
           </div>
         </div>

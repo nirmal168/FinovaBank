@@ -11,8 +11,7 @@ import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import {
   Wallet,
   ArrowLeft,
-  ArrowDownLeft,
-  ArrowUpRight,
+  ArrowLeftRight,
   Snowflake,
   Play,
   Copy,
@@ -22,6 +21,7 @@ import {
   ShieldCheck,
   CreditCard,
   Receipt,
+  BookOpen,
 } from 'lucide-react';
 import { formatCurrency, formatAmount } from '../../utils/currency';
 
@@ -166,15 +166,15 @@ const AccountDetails = () => {
               {isFrozen ? 'Unfreeze Account' : 'Freeze Account'}
             </Button>
 
-            <Link to="/deposit">
-              <Button variant="primary" size="sm" icon={ArrowDownLeft} className="!bg-emerald-600 hover:!bg-emerald-700">
-                Deposit
+            <Link to="/service-requests">
+              <Button variant="outline" size="sm" icon={BookOpen}>
+                Cheque & Passbook
               </Button>
             </Link>
 
-            <Link to="/withdraw">
-              <Button variant="outline" size="sm" icon={ArrowUpRight} disabled={isFrozen || isClosed}>
-                Withdraw
+            <Link to="/transfer">
+              <Button variant="primary" size="sm" icon={ArrowLeftRight} disabled={isFrozen || isClosed} className="!bg-brand-600 hover:!bg-brand-700">
+                Transfer Money
               </Button>
             </Link>
           </div>

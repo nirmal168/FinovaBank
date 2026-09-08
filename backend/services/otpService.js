@@ -1,11 +1,12 @@
-﻿const crypto = require('crypto');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const Otp = require('../models/Otp');
-const { sendOtpEmail } = require('../utils/emailService');
+const User = require('../models/User');
+const { sendOtpEmail } = require('./emailService');
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 5;
 
 /**
  * Reusable OTP Service
@@ -72,17 +73,29 @@ const otpService = {
       { upsert: true, new: true }
     );
 
-    // Send via email service
+    // Find recipient's name if user exists
+    let recipientName = 'Customer';
+    if (user) {
+      const u = await User.findById(user).select('name');
+      if (u) recipientName = u.name;
+    } else {
+      const u = await User.findOne({ email: normalizedEmail }).select('name');
+      if (u) recipientName = u.name;
+    }
+
+    // Send via central email service
     await sendOtpEmail({
       to: normalizedEmail,
+      name: recipientName,
       otp: rawOtp,
+      minutes: 5,
       purpose,
       metadata,
     });
 
     return {
       success: true,
-      message: `OTP sent successfully to ${normalizedEmail}`,
+      message: `Verification code sent to your registered email.`,
       expiresIn: '5 minutes',
       cooldown: 60,
     };

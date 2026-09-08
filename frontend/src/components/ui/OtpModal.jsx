@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import otpService from '../../services/otpService';
-import { ShieldCheck, RefreshCw, AlertCircle, Clock, Lock } from 'lucide-react';
+import { ShieldCheck, RefreshCw, AlertCircle, Clock, Lock, Sparkles } from 'lucide-react';
 
 const OtpModal = ({
   isOpen,
@@ -14,13 +14,22 @@ const OtpModal = ({
   description,
   loading = false,
   error: externalError,
+  devOtp: initialDevOtp,
 }) => {
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(300); // 5 minutes (300s)
   const [cooldown, setCooldown] = useState(60); // 60s resend cooldown
   const [resending, setResending] = useState(false);
   const [localError, setLocalError] = useState(null);
+  const [activeDevOtp, setActiveDevOtp] = useState(initialDevOtp);
   const inputRefs = useRef([]);
+
+  // Sync devOtp if changed externally
+  useEffect(() => {
+    if (initialDevOtp) {
+      setActiveDevOtp(initialDevOtp);
+    }
+  }, [initialDevOtp]);
 
   // Reset state when opening
   useEffect(() => {
@@ -29,11 +38,12 @@ const OtpModal = ({
       setTimer(300);
       setCooldown(60);
       setLocalError(null);
+      if (initialDevOtp) setActiveDevOtp(initialDevOtp);
       setTimeout(() => {
         if (inputRefs.current[0]) inputRefs.current[0].focus();
       }, 100);
     }
-  }, [isOpen]);
+  }, [isOpen, initialDevOtp]);
 
   // Countdown timers
   useEffect(() => {
@@ -89,7 +99,8 @@ const OtpModal = ({
     try {
       setResending(true);
       setLocalError(null);
-      await otpService.resendOtp({ email, purpose });
+      const res = await otpService.resendOtp({ email, purpose });
+      if (res?.devOtp) setActiveDevOtp(res.devOtp);
       setCooldown(60);
       setTimer(300);
       setDigits(['', '', '', '', '', '']);
@@ -123,6 +134,27 @@ const OtpModal = ({
             {description || `A 6-digit authentication passcode was sent to ${email || 'your registered email'}.`}
           </p>
         </div>
+
+        {/* Development Helper Badge */}
+        {activeDevOtp && (
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>Dev Passcode: <strong className="font-mono text-sm tracking-widest bg-white px-2 py-0.5 rounded border border-amber-300">{activeDevOtp}</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const parts = activeDevOtp.split('');
+                setDigits(parts);
+                onVerify(activeDevOtp);
+              }}
+              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors shadow-xs"
+            >
+              Auto-Fill
+            </button>
+          </div>
+        )}
 
         {/* 6 Digit Inputs */}
         <div className="flex items-center justify-center gap-2 sm:gap-3 my-4" onPaste={handlePaste}>

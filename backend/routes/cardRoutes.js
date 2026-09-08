@@ -42,16 +42,10 @@ const applyCardValidation = [
     .withMessage('Invalid card type selected'),
   check('transactionLimit')
     .optional()
-    .isFloat({ min: 50, max: 10000 })
-    .withMessage('Daily transaction limit must be between $50 and $10,000'),
+    .isFloat({ min: 100, max: 500000 })
+    .withMessage('Daily transaction limit must be between ₹100.00 and ₹5,00,000.00'),
   check('accountId')
-    .custom((value, { req }) => {
-      const targetId = value || req.body.account;
-      if (!targetId) {
-        throw new Error('Please select a valid bank account');
-      }
-      return true;
-    }),
+    .optional(),
 ];
 
 // @route   POST /api/cards/apply & POST /api/cards
@@ -74,7 +68,7 @@ router.put(
   '/:id/status',
   [
     check('id', 'Invalid card ID').isMongoId(),
-    check('status', 'Status must be Active, Blocked, or Inactive').isIn(['Active', 'Blocked', 'Inactive']),
+    check('status', 'Status must be Active, Blocked, Inactive, or Pending').isIn(['Active', 'Blocked', 'Inactive', 'Pending']),
   ],
   validate,
   updateCardStatus
@@ -97,8 +91,8 @@ router.put(
   '/:id/limit',
   [
     check('id', 'Invalid card ID').isMongoId(),
-    check('transactionLimit', 'Daily transaction limit must be between $50 and $10,000')
-      .isFloat({ min: 50, max: 10000 }),
+    check('transactionLimit', 'Daily transaction limit must be between ₹100.00 and ₹5,00,000.00')
+      .isFloat({ min: 100, max: 500000 }),
   ],
   validate,
   setTransactionLimit

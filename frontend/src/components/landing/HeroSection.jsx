@@ -173,13 +173,13 @@ const HeroSection = ({ onWatchDemo }) => {
 
                   <button
                     type="button"
-                    onClick={() => handleAction('/deposit')}
+                    onClick={() => handleAction('/accounts')}
                     className="flex flex-col items-center gap-1 p-2 rounded-xl bg-[var(--finova-bg-secondary)] hover:bg-[var(--finova-border)]/50 transition-colors group"
                   >
                     <div className="h-7 w-7 rounded-lg bg-[var(--finova-sage)]/10 text-[var(--finova-sage)] group-hover:scale-105 transition-transform flex items-center justify-center">
-                      <Download className="h-3.5 w-3.5" />
+                      <Landmark className="h-3.5 w-3.5" />
                     </div>
-                    <span className="text-[10px] font-bold text-[var(--finova-text-heading)]">Deposit</span>
+                    <span className="text-[10px] font-bold text-[var(--finova-text-heading)]">Accounts</span>
                   </button>
 
                   <button

@@ -24,6 +24,7 @@ import {
   Clock,
   XCircle,
   SlidersHorizontal,
+  FileText,
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/currency';
 
@@ -226,6 +227,16 @@ const Transactions = () => {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <Link to="/statements">
+            <Button
+              variant="primary"
+              size="sm"
+              icon={FileText}
+            >
+              Bank Statement
+            </Button>
+          </Link>
+
           <Button
             variant="outline"
             size="sm"

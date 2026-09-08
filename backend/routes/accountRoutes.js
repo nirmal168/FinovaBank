@@ -7,7 +7,7 @@ const {
   updateAccountStatus,
   lookupAccount,
 } = require('../controllers/accountController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
@@ -29,9 +29,10 @@ const handleValidation = (req, res, next) => {
 // All account routes are protected
 router.use(protect);
 
-// @route   POST /api/accounts - Create a new bank account
+// @route   POST /api/accounts - Create a new bank account (Admin only)
 router.post(
   '/',
+  authorize('admin'),
   [
     body('accountType')
       .optional()

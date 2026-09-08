@@ -25,10 +25,17 @@ const loanRoutes = require('./routes/loanRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const otpRoutes = require('./routes/otpRoutes');
+const serviceRequestRoutes = require('./routes/serviceRequestRoutes');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+const { verifyMailConnection } = require('./config/mail');
 
 // Connect to MongoDB
 connectDB();
+
+// Safely verify SMTP configuration (non-blocking, will not crash app if unconfigured)
+verifyMailConnection().catch((err) => {
+  console.warn('[Finova Mail] Transporter verification deferred:', err.message);
+});
 
 const app = express();
 
@@ -127,6 +134,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/otp', otpRoutes);
+app.use('/api/service-requests', serviceRequestRoutes);
 
 // Serve static frontend assets in production mode
 if (process.env.NODE_ENV === 'production') {

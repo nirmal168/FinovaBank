@@ -41,10 +41,13 @@ const protect = async (req, res, next) => {
       });
     }
 
-    if (!user.isActive) {
+    if (!user.isActive || user.status === 'Inactive' || user.status === 'Frozen') {
       return res.status(403).json({
         success: false,
-        message: 'Your account has been deactivated. Please contact support.',
+        message:
+          user.status === 'Frozen'
+            ? 'Your account has been frozen. Please contact Finova administration.'
+            : 'Your account has been deactivated. Please contact Finova administration.',
       });
     }
 
@@ -57,6 +60,25 @@ const protect = async (req, res, next) => {
       error: error.message,
     });
   }
+};
+
+// Admin middleware - strictly checks user.role === 'admin'
+const adminMiddleware = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required',
+    });
+  }
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Admin access required',
+    });
+  }
+
+  next();
 };
 
 // Role-based authorization middleware
@@ -85,4 +107,5 @@ const authorize = (...roles) => {
 module.exports = {
   protect,
   authorize,
+  adminMiddleware,
 };
