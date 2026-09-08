@@ -1,5 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const { getDbDiagnostics } = require('../config/db');
 
 const router = express.Router();
 
@@ -13,6 +14,7 @@ router.get('/', (req, res) => {
   };
 
   const dbStatus = dbStateMap[mongoose.connection.readyState] || 'unknown';
+  const diagnostics = getDbDiagnostics ? getDbDiagnostics() : {};
 
   res.status(200).json({
     status: 'ok',
@@ -23,6 +25,7 @@ router.get('/', (req, res) => {
     database: {
       status: dbStatus,
       isConnected: mongoose.connection.readyState === 1,
+      ...diagnostics,
     },
   });
 });
