@@ -632,3 +632,4 @@ You can log in directly at [http://localhost:5173/login](http://localhost:5173/l
 
 ## License
 Distributed under the MIT License. See `LICENSE` for more information.
+# FinovaBank
