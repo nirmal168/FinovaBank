@@ -135,12 +135,20 @@ async function runAudit() {
     const accountsRes = await req('GET', '/accounts', null, customerToken);
     test(accountsRes.status === 200 && accountsRes.data?.accounts?.length >= 1, 'GET /api/accounts (List Customer Accounts)');
 
-    // POST /api/accounts (Create secondary Current account)
-    const newAccountRes = await req('POST', '/accounts', {
+    // Verify customer cannot create account directly (403 Forbidden)
+    const custCreateAccRes = await req('POST', '/accounts', {
       accountType: 'Current',
       initialDeposit: 5000
     }, customerToken);
-    test(newAccountRes.status === 201 && newAccountRes.data?.account?.accountNumber, 'POST /api/accounts (Create Secondary Account)');
+    test(custCreateAccRes.status === 403, 'POST /api/accounts (403 Customer Prohibited from Self-Creating Account)');
+
+    // Admin creates secondary Current account for customer
+    const newAccountRes = await req('POST', '/accounts', {
+      accountType: 'Current',
+      initialDeposit: 5000,
+      userId: customerUserId
+    }, adminToken);
+    test(newAccountRes.status === 201 && newAccountRes.data?.account?.accountNumber, 'POST /api/accounts (Admin Creates Secondary Account for Customer)');
     const secondAccount = newAccountRes.data?.account;
 
     // GET /api/accounts/:id
@@ -160,21 +168,35 @@ async function runAudit() {
 
     // 4. Transactions Endpoints
     console.log('\n--- 4. Transactions & Funds Movement ---');
-    // Deposit
+    // Customer deposit rejected (403 - Teller/Branch Only)
+    const custDepReject = await req('POST', '/transactions/deposit', {
+      accountNumber: customerAccountNum,
+      amount: 1000,
+    }, customerToken);
+    test(custDepReject.status === 403, 'POST /api/transactions/deposit (403 Customer Direct Deposit Prohibited)');
+
+    // Admin-initiated Teller Deposit
     const depRes = await req('POST', '/transactions/deposit', {
       accountNumber: customerAccountNum,
       amount: 1000,
       description: 'Audit Test Deposit'
-    }, customerToken);
-    test(depRes.status === 200 && depRes.data?.transaction?.amount === 1000, 'POST /api/transactions/deposit (Deposit Funds)');
+    }, adminToken);
+    test(depRes.status === 200 && depRes.data?.transaction?.amount === 1000, 'POST /api/transactions/deposit (Admin Teller Deposit)');
 
-    // Withdraw
+    // Customer withdrawal rejected (403 - ATM/Teller Only)
+    const custWithReject = await req('POST', '/transactions/withdraw', {
+      accountNumber: customerAccountNum,
+      amount: 500,
+    }, customerToken);
+    test(custWithReject.status === 403, 'POST /api/transactions/withdraw (403 Customer Direct Withdrawal Prohibited)');
+
+    // Admin-initiated Teller Withdrawal
     const withRes = await req('POST', '/transactions/withdraw', {
       accountNumber: customerAccountNum,
       amount: 500,
       description: 'Audit Test Withdrawal'
-    }, customerToken);
-    test(withRes.status === 200 && withRes.data?.transaction?.amount === 500, 'POST /api/transactions/withdraw (Withdraw Funds)');
+    }, adminToken);
+    test(withRes.status === 200 && withRes.data?.transaction?.amount === 500, 'POST /api/transactions/withdraw (Admin Teller Withdrawal)');
 
     // Transfer between own accounts or to demo customer
     const transRes = await req('POST', '/transactions/transfer', {
@@ -184,6 +206,13 @@ async function runAudit() {
       description: 'Internal Transfer Test'
     }, customerToken);
     test(transRes.status === 200 && transRes.data?.transaction?.amount === 750, 'POST /api/transactions/transfer (Execute Transfer)');
+
+    // Bank Statement Generation
+    const stmtRes = await req('GET', `/transactions/statement?accountNumber=${customerAccountNum}`, null, customerToken);
+    test(
+      stmtRes.status === 200 && stmtRes.data?.success && stmtRes.data?.data?.summary,
+      'GET /api/transactions/statement (Official Bank Statement Retrieval)'
+    );
 
     // GET /api/transactions
     const txListRes = await req('GET', '/transactions', null, customerToken);
