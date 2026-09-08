@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import notificationService from '../services/notificationService';
@@ -52,6 +52,8 @@ export const NotificationProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     const socketUrl = import.meta.env.VITE_API_URL?.startsWith('http')
       ? import.meta.env.VITE_API_URL.replace('/api', '')
+      : (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app'))
+      ? 'https://finovabank.onrender.com'
       : window.location.origin;
 
     const newSocket = io(socketUrl, {
