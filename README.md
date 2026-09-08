@@ -178,7 +178,7 @@ graph TD
 
 ```
 banking-system/
-├── client/                           # React + Vite Frontend Application
+├── frontend/                         # React + Vite Frontend Application
 │   ├── public/                       # Static branding & favicon assets
 │   ├── src/
 │   │   ├── assets/                   # Theme images & CSS
@@ -204,7 +204,7 @@ banking-system/
 │   ├── tailwind.config.js
 │   └── vite.config.js
 │
-├── server/                           # Node.js + Express Backend API
+├── backend/                          # Node.js + Express Backend API
 │   ├── config/
 │   │   └── db.js                     # MongoDB connection bootstrap
 │   ├── controllers/                  # API business logic handlers
@@ -280,9 +280,9 @@ cd banking-system
 
 Finova provides clear environment templates. Copy the sample files:
 
-### Backend Configuration (`server/.env`)
+### Backend Configuration (`backend/.env`)
 ```bash
-cd server
+cd backend
 cp .env.example .env
 ```
 Fill in the configuration variables:
@@ -305,9 +305,9 @@ SMTP_FROM="Finova Security <security@finova.com>"
 ML_SERVICE_URL=http://127.0.0.1:8000
 ```
 
-### Frontend Configuration (`client/.env`)
+### Frontend Configuration (`frontend/.env`)
 ```bash
-cd ../client
+cd ../frontend
 cp .env.example .env
 ```
 Ensure the API endpoint points to your backend:
@@ -330,7 +330,7 @@ VITE_API_URL=http://localhost:5000/api
 1. Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
 2. Create a database user with read/write privileges.
 3. Whitelist your current IP address (or `0.0.0.0/0` for development).
-4. Update `MONGO_URI` in `server/.env`:
+4. Update `MONGO_URI` in `backend/.env`:
    ```env
    MONGO_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/finova?retryWrites=true&w=majority
    ```
@@ -340,7 +340,7 @@ VITE_API_URL=http://localhost:5000/api
 ## 11. Frontend Setup
 
 ```bash
-cd client
+cd frontend
 
 # 1. Install dependencies
 npm install
@@ -358,7 +358,7 @@ The client will be accessible at `http://localhost:5173`.
 ## 12. Backend Setup
 
 ```bash
-cd server
+cd backend
 
 # 1. Install dependencies
 npm install
