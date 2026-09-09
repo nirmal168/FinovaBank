@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import adminService from '../../services/adminService';
+import depositWithdrawalService from '../../services/depositWithdrawalService';
 import StatCard from '../../components/admin/StatCard';
 import MonthlyTransactionsChart from '../../components/admin/MonthlyTransactionsChart';
 import DepositsVsWithdrawalsChart from '../../components/admin/DepositsVsWithdrawalsChart';
@@ -27,6 +29,7 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
   const [charts, setCharts] = useState(null);
   const [suspiciousList, setSuspiciousList] = useState([]);
+  const [depWithSummary, setDepWithSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,13 +40,21 @@ const AdminDashboard = () => {
       else setLoading(true);
       setError(null);
 
-      const response = await adminService.getDashboardStats();
-      if (response.success) {
-        setStats(response.data.statistics);
-        setCharts(response.data.charts);
-        setSuspiciousList(response.data.recentSuspiciousTransactions || []);
-      } else {
+      const [response, depWithRes] = await Promise.allSettled([
+        adminService.getDashboardStats(),
+        depositWithdrawalService.getAdminRequests({ limit: 1 }),
+      ]);
+
+      if (response.status === 'fulfilled' && response.value.success) {
+        setStats(response.value.data.statistics);
+        setCharts(response.value.data.charts);
+        setSuspiciousList(response.value.data.recentSuspiciousTransactions || []);
+      } else if (response.status === 'rejected') {
         setError('Failed to load dashboard data');
+      }
+
+      if (depWithRes.status === 'fulfilled' && depWithRes.value?.summary) {
+        setDepWithSummary(depWithRes.value.summary);
       }
     } catch (err) {
       console.error('Error fetching admin dashboard:', err);
@@ -109,6 +120,44 @@ const AdminDashboard = () => {
           </button>
         </div>
       )}
+
+      {/* Deposit & Withdrawal Requests Action Widget */}
+      <div className="rounded-3xl p-5 md:p-6 bg-[var(--finova-card-bg)] border border-[var(--finova-border)] shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-[var(--finova-primary)]/10 text-[var(--finova-primary)] flex items-center justify-center font-bold border border-[var(--finova-primary)]/20 shrink-0">
+            <Clock className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-[var(--finova-text-heading)]">
+              Deposit & Withdrawal Requests
+            </h3>
+            <div className="flex flex-wrap items-center gap-4 mt-1.5 text-xs">
+              <span className="flex items-center gap-1.5">
+                <span className="text-[var(--finova-text-secondary)]">Pending Deposits:</span>
+                <span className="font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                  {depWithSummary?.pendingDeposits ?? stats?.pendingDepositRequests ?? 0}
+                </span>
+              </span>
+              <span className="text-[var(--finova-text-muted)]">•</span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-[var(--finova-text-secondary)]">Pending Withdrawals:</span>
+                <span className="font-extrabold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                  {depWithSummary?.pendingWithdrawals ?? stats?.pendingWithdrawalRequests ?? 0}
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link to="/admin/deposit-withdrawal">
+            <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--finova-primary)] hover:opacity-90 text-white text-xs font-bold shadow-xs transition-opacity">
+              <span>Review Requests</span>
+              <ExternalLink className="h-3.5 w-3.5" />
+            </button>
+          </Link>
+        </div>
+      </div>
 
       {/* 8 Statistics Cards Grid */}
       <div>

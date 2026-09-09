@@ -23,9 +23,14 @@ import LoanDetails from './pages/customer/LoanDetails';
 import Notifications from './pages/customer/Notifications';
 import Settings from './pages/customer/Settings';
 import BankStatement from './pages/customer/BankStatement';
+import DepositRequest from './pages/customer/DepositRequest';
+import WithdrawalRequest from './pages/customer/WithdrawalRequest';
+import DepositWithdrawalHistory from './pages/customer/DepositWithdrawalHistory';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminCustomers from './pages/admin/Customers';
 import AdminAccounts from './pages/admin/Accounts';
+import AdminDepositWithdrawalManagement from './pages/admin/DepositWithdrawalManagement';
+import AdminDepositWithdrawalDetails from './pages/admin/DepositWithdrawalDetails';
 import AdminCards from './pages/admin/Cards';
 import AdminServiceRequests from './pages/admin/ServiceRequests';
 import AdminTransactions from './pages/admin/Transactions';
@@ -112,9 +117,9 @@ function App() {
               >
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/profile" element={<Profile />} />
-                {/* Deposit & Withdraw are admin-only — redirect customers to unauthorized */}
-                <Route path="/deposit" element={<Navigate to="/unauthorized" replace />} />
-                <Route path="/withdraw" element={<Navigate to="/unauthorized" replace />} />
+                <Route path="/deposit" element={<DepositRequest />} />
+                <Route path="/withdraw" element={<WithdrawalRequest />} />
+                <Route path="/deposit-withdrawal-requests" element={<DepositWithdrawalHistory />} />
                 <Route path="/accounts" element={<Accounts />} />
                 <Route path="/accounts/:id" element={<AccountDetails />} />
                 <Route path="/transfer" element={<Transfer />} />
@@ -161,6 +166,22 @@ function App() {
               element={
                 <AdminRoute>
                   <AdminAccounts />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/deposit-withdrawal"
+              element={
+                <AdminRoute>
+                  <AdminDepositWithdrawalManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/deposit-withdrawal/:id"
+              element={
+                <AdminRoute>
+                  <AdminDepositWithdrawalDetails />
                 </AdminRoute>
               }
             />

@@ -52,8 +52,6 @@ export const NotificationProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     const socketUrl = import.meta.env.VITE_API_URL?.startsWith('http')
       ? import.meta.env.VITE_API_URL.replace('/api', '')
-      : (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app'))
-      ? 'https://finovabank.onrender.com'
       : window.location.origin;
 
     const newSocket = io(socketUrl, {

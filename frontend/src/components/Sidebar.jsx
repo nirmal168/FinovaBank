@@ -16,6 +16,7 @@ import {
   Bell,
   FileText,
   BookOpen,
+  ArrowDownLeft,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import finovaShield from '../assets/finova-shield.png';
@@ -23,6 +24,7 @@ import finovaShield from '../assets/finova-shield.png';
 const customerNavItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Accounts', path: '/accounts', icon: Wallet },
+  { name: 'Deposit / Withdraw', path: '/deposit-withdrawal-requests', icon: ArrowDownLeft },
   { name: 'Transfer Funds', path: '/transfer', icon: ArrowLeftRight },
   { name: 'Beneficiaries', path: '/beneficiaries', icon: Users },
   { name: 'Transactions', path: '/transactions', icon: Receipt },
@@ -123,6 +125,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
                   { name: 'Customer Management', path: '/admin/customers', icon: Users },
                   { name: 'Bank Accounts', path: '/admin/accounts', icon: Wallet },
+                  { name: 'Deposit & Withdrawal Requests', path: '/admin/deposit-withdrawal', icon: ArrowDownLeft },
                   { name: 'Cards & Merchant Issuance', path: '/admin/cards', icon: CreditCard },
                   { name: 'Cheque & Passbook Issuance', path: '/admin/service-requests', icon: BookOpen },
                   { name: 'Transactions Audit', path: '/admin/transactions', icon: Receipt },

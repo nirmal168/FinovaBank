@@ -1,22 +1,11 @@
 import axios from 'axios';
 
-const getBaseUrl = () => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  // Automatic fallback for Vercel production deployments if env var wasn't provided at build time
-  if (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app')) {
-    return 'https://finovabank.onrender.com/api';
-  }
-  return '/api';
-};
-
 const api = axios.create({
-  baseURL: getBaseUrl(),
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 10000,
 });
 
 // Request interceptor

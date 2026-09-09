@@ -15,6 +15,8 @@ import {
   AlertCircle,
   ExternalLink,
   ChevronRight,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -39,8 +41,25 @@ import { useTheme } from '../../context/ThemeContext';
 import accountService from '../../services/accountService';
 import transactionService from '../../services/transactionService';
 import loanService from '../../services/loanService';
+import depositWithdrawalService from '../../services/depositWithdrawalService';
 
 const quickActions = [
+  {
+    title: 'Deposit Money',
+    description: 'Cash & counter request',
+    icon: ArrowDownLeft,
+    to: '/deposit',
+    bg: 'bg-[var(--finova-card-bg)] text-[var(--finova-text-heading)] border-[var(--finova-border)] hover:border-emerald-500 hover:bg-[var(--finova-bg-secondary)]',
+    iconBg: 'bg-emerald-500/10 text-emerald-600',
+  },
+  {
+    title: 'Withdraw Money',
+    description: 'Cash counter request',
+    icon: ArrowUpRight,
+    to: '/withdraw',
+    bg: 'bg-[var(--finova-card-bg)] text-[var(--finova-text-heading)] border-[var(--finova-border)] hover:border-amber-500 hover:bg-[var(--finova-bg-secondary)]',
+    iconBg: 'bg-amber-500/10 text-amber-600',
+  },
   {
     title: 'Transfer Money',
     description: 'P2P & bank wires',
@@ -95,6 +114,7 @@ const Dashboard = () => {
   const [primaryAccount, setPrimaryAccount] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loans, setLoans] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
 
   const loadDashboardData = async () => {
     try {
@@ -102,11 +122,16 @@ const Dashboard = () => {
       setError(null);
 
       // Concurrent data fetching for optimal performance
-      const [accsRes, historyRes, loansRes] = await Promise.allSettled([
+      const [accsRes, historyRes, loansRes, depWithRes] = await Promise.allSettled([
         accountService.getAccounts(),
         transactionService.getHistory(30),
         loanService.getLoans(),
+        depositWithdrawalService.getMyRequests({ limit: 10 }),
       ]);
+
+      if (depWithRes.status === 'fulfilled' && depWithRes.value?.requests) {
+        setPendingRequests(depWithRes.value.requests.filter((r) => r.status === 'PENDING'));
+      }
 
       if (accsRes.status === 'fulfilled' && accsRes.value?.accounts) {
         setAccounts(accsRes.value.accounts);
@@ -533,6 +558,74 @@ const Dashboard = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pending Deposit & Withdrawal Requests Widget */}
+      {pendingRequests.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-amber-500" />
+              <h2 className="text-base font-bold text-[var(--finova-text-heading)] tracking-tight">
+                Pending Requests Awaiting Admin Approval
+              </h2>
+            </div>
+            <Link to="/deposit-withdrawal-requests">
+              <Button variant="ghost" size="sm" className="text-xs text-[var(--finova-primary)]">
+                View all requests &rarr;
+              </Button>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {pendingRequests.map((req) => {
+              const isDeposit = req.type === 'DEPOSIT';
+              return (
+                <div
+                  key={req._id}
+                  className="p-4 rounded-2xl border border-[var(--finova-border)] bg-[var(--finova-card-bg)] shadow-xs flex flex-col justify-between space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                        isDeposit
+                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                          : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                      }`}
+                    >
+                      {isDeposit ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                      {isDeposit ? 'Deposit Request' : 'Withdrawal Request'}
+                    </span>
+                    <span className="font-mono text-[11px] text-[var(--finova-text-secondary)]">
+                      {req.requestId}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="text-lg font-black text-[var(--finova-text-heading)]">
+                      {formatCurrency(req.amount)}
+                    </div>
+                    <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mt-0.5">
+                      Pending Admin Approval
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-[var(--finova-border)] flex items-center justify-between text-[10px] text-[var(--finova-text-secondary)]">
+                    <span>
+                      Account: ••••{req.account?.accountNumber ? req.account.accountNumber.slice(-4) : '----'}
+                    </span>
+                    <span>
+                      {new Date(req.requestedAt || req.createdAt).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 5. Recent Transactions Table */}
       <div className="space-y-3">

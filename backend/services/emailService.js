@@ -10,6 +10,7 @@ const { passwordResetEmail } = require('../templates/emails/passwordResetEmail')
 const { transactionEmail } = require('../templates/emails/transactionEmail');
 const { loanEmail } = require('../templates/emails/loanEmail');
 const { fraudAlertEmail } = require('../templates/emails/fraudAlertEmail');
+const { depositWithdrawalEmail } = require('../templates/emails/depositWithdrawalEmail');
 
 /**
  * Strips HTML tags for clean plain-text fallback if text is not explicitly supplied
@@ -314,6 +315,45 @@ const sendFraudAlertEmail = async ({ to, name, alertData }) => {
   });
 };
 
+/**
+ * 7. Send Deposit / Withdrawal Decision Email
+ */
+const sendDepositWithdrawalEmail = async ({
+  to,
+  name,
+  request,
+  account,
+  transaction = null,
+}) => {
+  const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
+  const { subject, html } = depositWithdrawalEmail({
+    name,
+    requestId: request.requestId,
+    type: request.type,
+    amount: request.amount,
+    status: request.status,
+    accountNumber: account?.accountNumber || '',
+    transactionId: transaction?.transactionId || null,
+    date: request.processedAt || new Date(),
+    adminNote: request.adminNote || '',
+    frontendUrl,
+  });
+
+  return sendEmail({
+    to,
+    subject,
+    html,
+    type: `${request.type}_REQUEST_${request.status}`,
+    metadata: {
+      requestId: request.requestId,
+      status: request.status,
+      type: request.type,
+      amount: request.amount,
+      accountId: account?._id ? account._id.toString() : null,
+    },
+  });
+};
+
 module.exports = {
   sendEmail,
   sendWelcomeEmail,
@@ -322,4 +362,5 @@ module.exports = {
   sendTransactionEmail,
   sendLoanStatusEmail,
   sendFraudAlertEmail,
+  sendDepositWithdrawalEmail,
 };

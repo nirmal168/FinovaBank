@@ -26,6 +26,10 @@ const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const otpRoutes = require('./routes/otpRoutes');
 const serviceRequestRoutes = require('./routes/serviceRequestRoutes');
+const {
+  customerRouter: depositWithdrawalRoutes,
+  adminRouter: adminDepositWithdrawalRoutes,
+} = require('./routes/depositWithdrawalRoutes');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const { verifyMailConnection } = require('./config/mail');
 
@@ -148,6 +152,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/otp', otpRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
+app.use('/api/deposit-withdrawal-requests', depositWithdrawalRoutes);
+app.use('/api/admin/deposit-withdrawal-requests', adminDepositWithdrawalRoutes);
 
 // Serve static frontend assets in production mode
 if (process.env.NODE_ENV === 'production') {

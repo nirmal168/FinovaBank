@@ -30,10 +30,15 @@ const transactionSchema = new mongoose.Schema(
       required: [true, 'Transaction amount is required'],
       min: [0.01, 'Amount must be greater than 0'],
     },
+    currency: {
+      type: String,
+      default: 'INR',
+      trim: true,
+    },
     type: {
       type: String,
       enum: {
-        values: ['DEPOSIT', 'WITHDRAW', 'TRANSFER', 'PAYMENT', 'REFUND'],
+        values: ['DEPOSIT', 'WITHDRAW', 'WITHDRAWAL', 'TRANSFER', 'PAYMENT', 'REFUND'],
         message: '{VALUE} is not a valid transaction type',
       },
       required: [true, 'Transaction type is required'],
@@ -61,6 +66,17 @@ const transactionSchema = new mongoose.Schema(
     balanceAfter: {
       type: Number,
       required: [true, 'Balance after transaction is required'],
+    },
+    processedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    requestId: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
     },
   },
   {

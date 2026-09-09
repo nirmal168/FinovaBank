@@ -5,6 +5,7 @@ const Loan = require('../models/Loan');
 const Card = require('../models/Card');
 const FraudAlert = require('../models/FraudAlert');
 const AuditLog = require('../models/AuditLog');
+const DepositWithdrawalRequest = require('../models/DepositWithdrawalRequest');
 const generateTransactionId = require('../utils/generateTransactionId');
 const generateAccountNumber = require('../utils/generateAccountNumber');
 const { createNotification } = require('../utils/notificationService');
@@ -28,6 +29,8 @@ const getDashboardStats = async (req, res, next) => {
       loanStats,
       pendingLoanStats,
       suspiciousTxList,
+      pendingDepositRequests,
+      pendingWithdrawalRequests,
     ] = await Promise.all([
       // Total Customers
       User.countDocuments({ role: 'customer' }),
@@ -71,6 +74,12 @@ const getDashboardStats = async (req, res, next) => {
         .sort({ createdAt: -1 })
         .limit(10)
         .populate('user', 'name email'),
+
+      // Pending Deposit Requests
+      DepositWithdrawalRequest.countDocuments({ type: 'DEPOSIT', status: 'PENDING' }),
+
+      // Pending Withdrawal Requests
+      DepositWithdrawalRequest.countDocuments({ type: 'WITHDRAWAL', status: 'PENDING' }),
     ]);
 
     const totalDeposits = {
@@ -252,6 +261,8 @@ const getDashboardStats = async (req, res, next) => {
           totalTransfers,
           totalLoans,
           pendingLoans,
+          pendingDepositRequests,
+          pendingWithdrawalRequests,
           suspiciousTransactions: {
             count: suspiciousCount,
             recent: suspiciousTxList,
@@ -265,6 +276,8 @@ const getDashboardStats = async (req, res, next) => {
           totalTransfers,
           totalLoans,
           pendingLoans,
+          pendingDepositRequests,
+          pendingWithdrawalRequests,
           suspiciousTransactions: {
             count: suspiciousCount,
             recent: suspiciousTxList,
